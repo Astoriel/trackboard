@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -6,32 +7,37 @@ dist/
 *.egg
 .venv/
 venv/
+
+# Environment
 .env
 .env.local
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*.code-workspace
+
+# Node
 node_modules/
 .next/
 out/
+
+# Docker
 pgdata/
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Testing
 .pytest_cache/
 htmlcov/
 .coverage
 playwright-report/
 test-results/
-.ruff_cache/
-.screenshots/
+
+# Local build/test artifacts
 *.tsbuildinfo
 *.db
 *.log
-*.log.*
-.codex-logs/
-*.resolved
-start-trackboard.ps1
-rebuild_history.sh
-*.log.bak
