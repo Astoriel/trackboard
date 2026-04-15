@@ -1,0 +1,15 @@
+<svg width="920" height="240" viewBox="0 0 920 240" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Trackboard logo</title>
+  <desc id="desc">Trackboard wordmark with a compass star mark.</desc>
+  <rect width="920" height="240" rx="48" fill="#F4F3EE"/>
+  <rect x="34" y="34" width="852" height="172" rx="38" fill="#11110F"/>
+  <circle cx="118" cy="120" r="48" fill="#F4F3EE"/>
+  <path d="M118 69C122.6 99.1 138.9 115.4 169 120C138.9 124.6 122.6 140.9 118 171C113.4 140.9 97.1 124.6 67 120C97.1 115.4 113.4 99.1 118 69Z" fill="#11110F"/>
+  <path d="M118 93C120.8 109.1 128.9 117.2 145 120C128.9 122.8 120.8 130.9 118 147C115.2 130.9 107.1 122.8 91 120C107.1 117.2 115.2 109.1 118 93Z" fill="#11110F" opacity="0.28"/>
+  <text x="203" y="126" fill="#F4F3EE" font-family="Georgia, 'Times New Roman', serif" font-size="76" font-style="italic" letter-spacing="-3">trackboard</text>
+  <text x="209" y="164" fill="#A8A39A" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" letter-spacing="5">TRACKING PLANS REVIEWED LIKE CODE</text>
+  <rect x="708" y="72" width="128" height="38" rx="19" fill="#F4F3EE" fill-opacity="0.08" stroke="#F4F3EE" stroke-opacity="0.12"/>
+  <text x="730" y="97" fill="#F4F3EE" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15">serious v1</text>
+  <path d="M747 137H833" stroke="#F4F3EE" stroke-opacity="0.16" stroke-width="1"/>
+  <path d="M747 154H806" stroke="#F4F3EE" stroke-opacity="0.16" stroke-width="1"/>
+</svg>
