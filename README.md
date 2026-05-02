@@ -16,6 +16,10 @@
 
 ---
 
+## Project status
+
+Active product prototype. Snapshot date: 2026-04-15. See [STATUS.md](STATUS.md) and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for current confidence, planned areas, and explicit non-goals.
+
 ## What it is
 
 Trackboard is a self-hostable workspace for analytics contracts.

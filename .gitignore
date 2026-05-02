@@ -41,3 +41,4 @@ test-results/
 *.tsbuildinfo
 *.db
 *.log
+rebuild_history.sh
