@@ -1,0 +1,17 @@
+name: Contract Check Example
+
+on:
+  pull_request:
+    paths:
+      - "tracking/**/*.json"
+
+jobs:
+  trackboard-contract-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./actions/contract-check
+        with:
+          base-contract: tracking/contract.main.json
+          head-contract: tracking/contract.pr.json
+          fail-on-breaking: "true"

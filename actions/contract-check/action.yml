@@ -1,0 +1,57 @@
+name: Trackboard Contract Check
+description: Fail pull requests that introduce breaking tracking contract changes.
+
+inputs:
+  base-contract:
+    description: Path to the base tracking contract JSON file.
+    required: true
+  head-contract:
+    description: Path to the proposed tracking contract JSON file.
+    required: true
+  fail-on-breaking:
+    description: Whether to fail the action when breaking changes are detected.
+    required: false
+    default: "true"
+
+outputs:
+  breaking:
+    description: "true when breaking changes were found"
+    value: ${{ steps.diff.outputs.breaking }}
+  breaking-count:
+    description: Number of breaking changes found
+    value: ${{ steps.diff.outputs.breaking-count }}
+  summary-json:
+    description: Path to the generated diff JSON file
+    value: ${{ steps.diff.outputs.summary-json }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build Trackboard CLI
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_ACTION_PATH/../../apps/cli"
+        npm ci
+        npm run build
+
+    - name: Diff tracking contracts
+      id: diff
+      shell: bash
+      run: |
+        set -euo pipefail
+        CLI_DIR="$GITHUB_ACTION_PATH/../../apps/cli"
+        DIFF_JSON="$RUNNER_TEMP/trackboard-contract-diff.json"
+        set +e
+        node "$CLI_DIR/dist/src/index.js" diff "${{ inputs.base-contract }}" "${{ inputs.head-contract }}" > "$DIFF_JSON"
+        DIFF_EXIT=$?
+        set -e
+        node "$CLI_DIR/dist/src/action.js" "$DIFF_JSON"
+        if [ "$DIFF_EXIT" -eq 2 ] && [ "${{ inputs.fail-on-breaking }}" = "true" ]; then
+          echo "Breaking tracking contract changes detected."
+          exit 1
+        fi
+        if [ "$DIFF_EXIT" -ne 0 ] && [ "$DIFF_EXIT" -ne 2 ]; then
+          echo "Trackboard diff failed with exit code $DIFF_EXIT."
+          exit "$DIFF_EXIT"
+        fi
