@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
@@ -12,9 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models import Version
+from app.services.contract_core import FORMAT_VERSION, contract_hash, normalize_contract
 from app.services.snapshot_service import SnapshotService
-
-FORMAT_VERSION = "trackboard.contract.v1"
 
 
 class ContractExportService:
@@ -66,20 +63,9 @@ def build_contract_payload(version: Version) -> dict[str, Any]:
         "global_properties": _sorted_properties(snapshot.get("global_properties", [])),
         "events": _sorted_events(snapshot.get("events", [])),
     }
-    contract["hash"] = contract_hash(contract)
-    return contract
-
-
-def contract_hash(contract: dict[str, Any]) -> str:
-    canonical = deepcopy(contract)
-    canonical.pop("hash", None)
-    encoded = json.dumps(
-        canonical,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    normalized = normalize_contract(contract)
+    normalized["hash"] = contract_hash(normalized)
+    return normalized
 
 
 def _sorted_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
