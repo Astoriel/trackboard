@@ -1,0 +1,8 @@
+{
+  "event": "signup_completed",
+  "properties": {
+    "user_id": "usr_123",
+    "signup_method": "twitter",
+    "extra": true
+  }
+}

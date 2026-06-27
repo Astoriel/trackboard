@@ -1,0 +1,38 @@
+{
+  "format_version": "trackboard.contract.v1",
+  "plan_id": "plan_1",
+  "version_id": "version_1",
+  "version_number": 1,
+  "name": "Web Analytics",
+  "description": "Core product events",
+  "published_at": "2026-06-27T12:00:00Z",
+  "global_properties": [
+    {
+      "name": "user_id",
+      "type": "string",
+      "required": true,
+      "constraints": {},
+      "description": "Stable user id",
+      "examples": ["usr_123"]
+    }
+  ],
+  "events": [
+    {
+      "event_name": "signup_completed",
+      "status": "active",
+      "description": "User completed signup",
+      "category": "activation",
+      "properties": [
+        {
+          "name": "signup_method",
+          "type": "string",
+          "required": true,
+          "constraints": { "enum_values": ["email", "google", "github"] },
+          "description": "Signup method",
+          "examples": ["google"]
+        }
+      ],
+      "global_properties": ["user_id"]
+    }
+  ]
+}
