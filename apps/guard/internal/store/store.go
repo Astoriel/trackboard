@@ -193,6 +193,47 @@ func (s *Store) DLQDepth(ctx context.Context) (int, error) {
 	return count, err
 }
 
+func (s *Store) PendingDLQ(ctx context.Context, limit int) ([]DLQEvent, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT id, idempotency_key, event_name, severity, reason_codes_json, payload_json, replay_status
+		 FROM dlq_events
+		 WHERE replay_status = 'pending'
+		 ORDER BY created_at ASC
+		 LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	events := []DLQEvent{}
+	for rows.Next() {
+		var event DLQEvent
+		if err := rows.Scan(&event.ID, &event.IdempotencyKey, &event.EventName, &event.Severity, &event.ReasonCodesJSON, &event.PayloadJSON, &event.ReplayStatus); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, rows.Err()
+}
+
+func (s *Store) MarkDLQReplayed(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE dlq_events SET replay_status = 'replayed' WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	return requireAffected(result)
+}
+
+func (s *Store) UpdateDLQReasons(ctx context.Context, id string, reasonCodesJSON string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE dlq_events SET reason_codes_json = ? WHERE id = ?`, reasonCodesJSON, id)
+	if err != nil {
+		return err
+	}
+	return requireAffected(result)
+}
+
 func requireAffected(result sql.Result) error {
 	count, err := result.RowsAffected()
 	if err != nil {

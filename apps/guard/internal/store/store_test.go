@@ -111,6 +111,26 @@ func TestStoreEnqueueDLQ(t *testing.T) {
 	if depth != 1 {
 		t.Fatalf("dlq depth = %d", depth)
 	}
+	pending, err := store.PendingDLQ(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].ID != "dlq_1" {
+		t.Fatalf("pending = %#v", pending)
+	}
+	if err := store.UpdateDLQReasons(ctx, "dlq_1", `["missing_required_property"]`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkDLQReplayed(ctx, "dlq_1"); err != nil {
+		t.Fatal(err)
+	}
+	depth, err = store.DLQDepth(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if depth != 0 {
+		t.Fatalf("dlq depth = %d", depth)
+	}
 }
 
 func openTestStore(t *testing.T) *Store {
