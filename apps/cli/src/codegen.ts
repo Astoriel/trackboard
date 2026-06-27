@@ -21,6 +21,18 @@ export function generateTypescript(contractInput: TrackboardContract): string {
     chunks.push(`  | { event: ${JSON.stringify(event.event_name)}; properties: ${toPascalCase(event.event_name)}Properties }`);
   }
   chunks.push(";", "");
+  chunks.push("export interface TrackboardClient {");
+  chunks.push("  track(input: TrackingEvent): Promise<void>;");
+  chunks.push("}", "");
+  for (const event of contract.events) {
+    const name = toPascalCase(event.event_name);
+    chunks.push(`export function track${name}(`);
+    chunks.push("  client: TrackboardClient,");
+    chunks.push(`  properties: ${name}Properties,`);
+    chunks.push("): Promise<void> {");
+    chunks.push(`  return client.track({ event: ${JSON.stringify(event.event_name)}, properties });`);
+    chunks.push("}", "");
+  }
   return `${chunks.join("\n")}\n`;
 }
 

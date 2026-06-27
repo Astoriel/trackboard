@@ -28,6 +28,20 @@ export type TrackingEvent =
 {% for event in events %}
   | { event: {{ event.event_name | ts_string }}; properties: {{ event.event_name | interface_name }}Properties }
 {% endfor %};
+
+export interface TrackboardClient {
+  track(input: TrackingEvent): Promise<void>;
+}
+
+{% for event in events %}
+export function track{{ event.event_name | interface_name }}(
+  client: TrackboardClient,
+  properties: {{ event.event_name | interface_name }}Properties,
+): Promise<void> {
+  return client.track({ event: {{ event.event_name | ts_string }}, properties });
+}
+
+{% endfor %}
 """
 
 TS_IDENTIFIER_RE = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")

@@ -50,6 +50,9 @@ async def test_codegen_typescript_and_json_schema(client):
     assert typescript.status_code == 200
     assert "interface CheckoutCompletedProperties" in typescript.text
     assert '"card" | "paypal"' in typescript.text
+    assert "export interface TrackboardClient" in typescript.text
+    assert "export function trackCheckoutCompleted" in typescript.text
+    assert 'return client.track({ event: "checkout_completed", properties });' in typescript.text
 
     json_schema = await client.get(
         f"/api/v1/plans/{plan['id']}/generate/json-schema",

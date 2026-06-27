@@ -14,6 +14,9 @@ test("generateTypescript emits event union and property interface", async () => 
   assert.match(output, /user_id: string;/);
   assert.match(output, /signup_method: "email" \| "github" \| "google";/);
   assert.match(output, /event: "signup_completed"/);
+  assert.match(output, /export interface TrackboardClient/);
+  assert.match(output, /export function trackSignupCompleted/);
+  assert.match(output, /return client\.track\(\{ event: "signup_completed", properties \}\);/);
 });
 
 async function fixture<T>(name: string): Promise<T> {
