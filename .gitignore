@@ -42,3 +42,6 @@ test-results/
 *.db
 *.log
 rebuild_history.sh
+
+# Local implementation worktrees
+.worktrees/
