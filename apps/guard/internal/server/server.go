@@ -10,6 +10,7 @@ import (
 	"github.com/astoriel/trackboard/apps/guard/internal/contract"
 	"github.com/astoriel/trackboard/apps/guard/internal/health"
 	"github.com/astoriel/trackboard/apps/guard/internal/ingest"
+	"github.com/astoriel/trackboard/apps/guard/internal/metrics"
 	"github.com/astoriel/trackboard/apps/guard/internal/policy"
 	"github.com/astoriel/trackboard/apps/guard/internal/validator"
 )
@@ -28,9 +29,11 @@ func New(cfg config.Config) *Server {
 			healthHandler.SetReady(true)
 		}
 	}
+	guardMetrics := metrics.New()
 	mux.HandleFunc("GET /health/live", healthHandler.Live)
 	mux.HandleFunc("GET /health/ready", healthHandler.Ready)
-	mux.HandleFunc("POST /v1/track", trackHandler(cache, policy.Mode(cfg.Mode)))
+	mux.HandleFunc("GET /metrics", guardMetrics.Handler)
+	mux.HandleFunc("POST /v1/track", trackHandler(cache, policy.Mode(cfg.Mode), guardMetrics))
 
 	return &Server{
 		httpServer: &http.Server{
@@ -41,7 +44,7 @@ func New(cfg config.Config) *Server {
 	}
 }
 
-func trackHandler(cache *contract.Cache, mode policy.Mode) http.HandlerFunc {
+func trackHandler(cache *contract.Cache, mode policy.Mode, guardMetrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cache == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "contract_not_loaded"})
@@ -59,6 +62,13 @@ func trackHandler(cache *contract.Cache, mode policy.Mode) http.HandlerFunc {
 		}
 		violations := validator.Validate(loaded, event)
 		decision := policy.Decide(mode, violations)
+		guardMetrics.IncAccepted()
+		if decision.Severity == "blocked" {
+			guardMetrics.IncBlocked()
+		}
+		if decision.Severity == "warning" {
+			guardMetrics.IncWarned()
+		}
 		writeJSON(w, http.StatusAccepted, map[string]any{
 			"accepted":   true,
 			"valid":      len(violations) == 0,

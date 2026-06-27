@@ -34,6 +34,28 @@ func TestTrackEndpointValidatesAgainstLoadedContract(t *testing.T) {
 	}
 }
 
+func TestMetricsEndpointReportsAcceptedAndBlockedEvents(t *testing.T) {
+	contractPath := writeServerContract(t)
+	srv := New(config.Config{HTTPAddr: ":0", ContractFile: contractPath, Mode: "block"})
+	trackReq := httptest.NewRequest(http.MethodPost, "/v1/track", strings.NewReader(`{
+		"event":"signup_completed",
+		"userId":"usr_123",
+		"properties":{"user_id":"usr_123","signup_method":"twitter"}
+	}`))
+	srv.httpServer.Handler.ServeHTTP(httptest.NewRecorder(), trackReq)
+	metricsRecorder := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(metricsRecorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+
+	body := metricsRecorder.Body.String()
+	if !strings.Contains(body, "trackboard_guard_events_accepted_total 1") {
+		t.Fatalf("missing accepted metric: %s", body)
+	}
+	if !strings.Contains(body, "trackboard_guard_events_blocked_total 1") {
+		t.Fatalf("missing blocked metric: %s", body)
+	}
+}
+
 func TestTrackEndpointReturnsUnavailableWithoutContract(t *testing.T) {
 	srv := New(config.Config{HTTPAddr: ":0", Mode: "block"})
 	req := httptest.NewRequest(http.MethodPost, "/v1/track", strings.NewReader(`{"event":"signup_completed"}`))
