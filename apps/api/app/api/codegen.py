@@ -9,8 +9,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.permissions import Permission, require_plan_permission
 from app.services.codegen_service import CodegenService
+from app.services.contract_export_service import ContractExportService
 
 router = APIRouter(tags=["codegen"])
+
+
+@router.get("/plans/{plan_id}/contract")
+async def export_contract(
+    plan_id: UUID,
+    version: int | None = None,
+    access=Depends(require_plan_permission(Permission.VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ContractExportService(db).export_published_contract(
+        plan_id,
+        version_number=version,
+    )
 
 
 @router.get("/plans/{plan_id}/generate/typescript")
