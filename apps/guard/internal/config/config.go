@@ -12,12 +12,14 @@ type Config struct {
 	HTTPAddr     string
 	ContractFile string
 	Ready        bool
+	Mode         string
 }
 
 func Default() Config {
 	return Config{
 		HTTPAddr: ":8080",
 		Ready:    false,
+		Mode:     "block",
 	}
 }
 
@@ -52,6 +54,8 @@ func Load(path string) (Config, error) {
 				return cfg, fmt.Errorf("invalid ready value: %w", err)
 			}
 			cfg.Ready = ready
+		case "mode":
+			cfg.Mode = value
 		default:
 			return cfg, fmt.Errorf("unknown config key %q", key)
 		}

@@ -1,3 +1,4 @@
 http_addr: ":8080"
 contract_file: "../contracts/web-analytics.v1.json"
 ready: false
+mode: "block"

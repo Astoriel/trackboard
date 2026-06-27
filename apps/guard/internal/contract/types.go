@@ -50,6 +50,14 @@ func (e Event) Property(name string) (Property, bool) {
 	return prop, ok
 }
 
+func (e Event) PropertyMap() map[string]Property {
+	properties := make(map[string]Property, len(e.propertyIndex))
+	for name, prop := range e.propertyIndex {
+		properties[name] = prop
+	}
+	return properties
+}
+
 func compile(raw Contract) (Contract, error) {
 	if raw.FormatVersion != FormatVersion {
 		return raw, fmt.Errorf("unsupported format_version %q", raw.FormatVersion)
