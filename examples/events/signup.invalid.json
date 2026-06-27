@@ -1,0 +1,10 @@
+{
+  "event": "signup_completed",
+  "userId": "usr_123",
+  "messageId": "msg_signup_002",
+  "properties": {
+    "user_id": "usr_123",
+    "signup_method": "twitter",
+    "utm_campaign": "summer"
+  }
+}

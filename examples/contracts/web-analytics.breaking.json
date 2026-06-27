@@ -1,0 +1,40 @@
+{
+  "format_version": "trackboard.contract.v1",
+  "plan_id": "plan_web",
+  "version_id": "version_2",
+  "version_number": 2,
+  "name": "Web Analytics",
+  "description": "Core product analytics contract",
+  "published_at": "2026-06-27T13:00:00Z",
+  "global_properties": [
+    {
+      "name": "user_id",
+      "type": "string",
+      "required": true,
+      "constraints": {},
+      "description": "Stable application user id",
+      "examples": ["usr_123"]
+    }
+  ],
+  "events": [
+    {
+      "event_name": "signup_completed",
+      "status": "active",
+      "description": "A user completes signup",
+      "category": "activation",
+      "properties": [
+        {
+          "name": "signup_method",
+          "type": "integer",
+          "required": true,
+          "constraints": {
+            "enum_values": ["google"]
+          },
+          "description": "Signup method selected by the user",
+          "examples": ["google"]
+        }
+      ],
+      "global_properties": ["user_id"]
+    }
+  ]
+}

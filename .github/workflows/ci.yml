@@ -51,3 +51,47 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+  cli:
+    name: CLI tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/cli
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/cli/package-lock.json
+
+      - name: Install CLI dependencies
+        run: npm ci
+
+      - name: Run CLI tests
+        run: npm test
+
+      - name: Smoke test examples
+        run: |
+          node dist/src/index.js validate --contract ../../examples/contracts/web-analytics.v1.json --event ../../examples/events/signup.valid.json
+          node dist/src/index.js diff ../../examples/contracts/web-analytics.v1.json ../../examples/contracts/web-analytics.v1.json
+
+  guard:
+    name: Guard tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/guard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/guard/go.mod
+
+      - name: Run Guard tests
+        run: go test ./...
+

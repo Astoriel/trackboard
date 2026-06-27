@@ -1,6 +1,6 @@
 http_addr: ":8080"
-contract_file: "../contracts/web-analytics.v1.json"
-store_file: "guard.db"
+contract_file: "../../examples/contracts/web-analytics.v1.json"
+store_file: "../../examples/guard/guard.db"
 destination: "http://localhost:9000/track"
-ready: false
+ready: true
 mode: "block"

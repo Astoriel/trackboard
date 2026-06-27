@@ -1,0 +1,9 @@
+{
+  "event": "signup_completed",
+  "userId": "usr_123",
+  "messageId": "msg_signup_001",
+  "properties": {
+    "user_id": "usr_123",
+    "signup_method": "google"
+  }
+}
