@@ -2,9 +2,23 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 
+function Invoke-Native {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string] $FilePath,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]] $Arguments
+  )
+
+  & $FilePath @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "$FilePath exited with code $LASTEXITCODE"
+  }
+}
+
 Push-Location (Join-Path $root "apps/api")
 try {
-  python -m pytest -q
+  Invoke-Native python -m pytest -q
 }
 finally {
   Pop-Location
@@ -12,9 +26,10 @@ finally {
 
 Push-Location (Join-Path $root "apps/cli")
 try {
-  npm test
-  node dist/src/index.js validate --contract ../../examples/contracts/web-analytics.v1.json --event ../../examples/events/signup.valid.json
-  node dist/src/index.js diff ../../examples/contracts/web-analytics.v1.json ../../examples/contracts/web-analytics.v1.json
+  Invoke-Native npm ci
+  Invoke-Native npm test
+  Invoke-Native node dist/src/index.js validate --contract ../../examples/contracts/web-analytics.v1.json --event ../../examples/events/signup.valid.json
+  Invoke-Native node dist/src/index.js diff ../../examples/contracts/web-analytics.v1.json ../../examples/contracts/web-analytics.v1.json
 }
 finally {
   Pop-Location
@@ -22,7 +37,7 @@ finally {
 
 Push-Location (Join-Path $root "apps/guard")
 try {
-  go test ./...
+  Invoke-Native go test ./...
 }
 finally {
   Pop-Location
