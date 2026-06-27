@@ -11,15 +11,18 @@ import (
 type Config struct {
 	HTTPAddr     string
 	ContractFile string
+	StoreFile    string
+	Destination  string
 	Ready        bool
 	Mode         string
 }
 
 func Default() Config {
 	return Config{
-		HTTPAddr: ":8080",
-		Ready:    false,
-		Mode:     "block",
+		HTTPAddr:  ":8080",
+		StoreFile: "guard.db",
+		Ready:     false,
+		Mode:      "block",
 	}
 }
 
@@ -48,6 +51,10 @@ func Load(path string) (Config, error) {
 			cfg.HTTPAddr = value
 		case "contract_file":
 			cfg.ContractFile = value
+		case "store_file":
+			cfg.StoreFile = value
+		case "destination":
+			cfg.Destination = value
 		case "ready":
 			ready, err := strconv.ParseBool(value)
 			if err != nil {

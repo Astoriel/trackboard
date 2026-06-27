@@ -104,6 +104,13 @@ func TestStoreEnqueueDLQ(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	depth, err := store.DLQDepth(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if depth != 1 {
+		t.Fatalf("dlq depth = %d", depth)
+	}
 }
 
 func openTestStore(t *testing.T) *Store {

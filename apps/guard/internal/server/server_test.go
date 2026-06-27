@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,14 +10,18 @@ import (
 	"testing"
 
 	"github.com/astoriel/trackboard/apps/guard/internal/config"
+	"github.com/astoriel/trackboard/apps/guard/internal/store"
 )
 
 func TestTrackEndpointValidatesAgainstLoadedContract(t *testing.T) {
 	contractPath := writeServerContract(t)
-	srv := New(config.Config{HTTPAddr: ":0", ContractFile: contractPath, Mode: "block"})
+	storePath := dbPath(t)
+	srv := New(config.Config{HTTPAddr: ":0", ContractFile: contractPath, StoreFile: storePath, Destination: "segment", Mode: "block"})
+	defer shutdownServer(t, srv)
 	req := httptest.NewRequest(http.MethodPost, "/v1/track", strings.NewReader(`{
 		"event":"signup_completed",
 		"userId":"usr_123",
+		"messageId":"msg_1",
 		"properties":{"user_id":"usr_123","signup_method":"twitter"}
 	}`))
 	recorder := httptest.NewRecorder()
@@ -32,14 +37,38 @@ func TestTrackEndpointValidatesAgainstLoadedContract(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), `"forward":false`) {
 		t.Fatalf("expected block decision, body = %s", recorder.Body.String())
 	}
+	assertDepths(t, storePath, 0, 1)
+}
+
+func TestTrackEndpointQueuesValidEventsInOutbox(t *testing.T) {
+	contractPath := writeServerContract(t)
+	storePath := dbPath(t)
+	srv := New(config.Config{HTTPAddr: ":0", ContractFile: contractPath, StoreFile: storePath, Destination: "segment", Mode: "block"})
+	defer shutdownServer(t, srv)
+	req := httptest.NewRequest(http.MethodPost, "/v1/track", strings.NewReader(`{
+		"event":"signup_completed",
+		"userId":"usr_123",
+		"messageId":"msg_valid",
+		"properties":{"user_id":"usr_123","signup_method":"google"}
+	}`))
+	recorder := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	assertDepths(t, storePath, 1, 0)
 }
 
 func TestMetricsEndpointReportsAcceptedAndBlockedEvents(t *testing.T) {
 	contractPath := writeServerContract(t)
-	srv := New(config.Config{HTTPAddr: ":0", ContractFile: contractPath, Mode: "block"})
+	srv := New(config.Config{HTTPAddr: ":0", ContractFile: contractPath, StoreFile: dbPath(t), Destination: "segment", Mode: "block"})
+	defer shutdownServer(t, srv)
 	trackReq := httptest.NewRequest(http.MethodPost, "/v1/track", strings.NewReader(`{
 		"event":"signup_completed",
 		"userId":"usr_123",
+		"messageId":"msg_1",
 		"properties":{"user_id":"usr_123","signup_method":"twitter"}
 	}`))
 	srv.httpServer.Handler.ServeHTTP(httptest.NewRecorder(), trackReq)
@@ -57,7 +86,8 @@ func TestMetricsEndpointReportsAcceptedAndBlockedEvents(t *testing.T) {
 }
 
 func TestTrackEndpointReturnsUnavailableWithoutContract(t *testing.T) {
-	srv := New(config.Config{HTTPAddr: ":0", Mode: "block"})
+	srv := New(config.Config{HTTPAddr: ":0", StoreFile: dbPath(t), Mode: "block"})
+	defer shutdownServer(t, srv)
 	req := httptest.NewRequest(http.MethodPost, "/v1/track", strings.NewReader(`{"event":"signup_completed"}`))
 	recorder := httptest.NewRecorder()
 
@@ -65,6 +95,38 @@ func TestTrackEndpointReturnsUnavailableWithoutContract(t *testing.T) {
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d", recorder.Code)
+	}
+}
+
+func dbPath(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "guard.db")
+}
+
+func assertDepths(t *testing.T, storePath string, outbox int, dlq int) {
+	t.Helper()
+	db, err := store.Open(context.Background(), storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	actualOutbox, err := db.QueueDepth(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualDLQ, err := db.DLQDepth(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actualOutbox != outbox || actualDLQ != dlq {
+		t.Fatalf("depths outbox=%d dlq=%d", actualOutbox, actualDLQ)
+	}
+}
+
+func shutdownServer(t *testing.T, srv *Server) {
+	t.Helper()
+	if err := srv.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 

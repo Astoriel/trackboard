@@ -187,6 +187,12 @@ func (s *Store) QueueDepth(ctx context.Context) (int, error) {
 	return count, err
 }
 
+func (s *Store) DLQDepth(ctx context.Context) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM dlq_events WHERE replay_status = 'pending'`).Scan(&count)
+	return count, err
+}
+
 func requireAffected(result sql.Result) error {
 	count, err := result.RowsAffected()
 	if err != nil {
