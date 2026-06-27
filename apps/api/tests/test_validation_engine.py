@@ -51,3 +51,28 @@ def test_validation_engine_reports_required_type_and_constraint_violations():
     assert "enum_violation" in codes
     assert "min_violation" in codes
     assert "unknown_property" in codes
+
+
+def test_validation_engine_reports_missing_type_and_max_violations():
+    snapshot = _snapshot()
+    snapshot["events"][0]["properties"].append(
+        {
+            "name": "score",
+            "type": "float",
+            "required": False,
+            "constraints": {"max": 100},
+        }
+    )
+
+    result = validate_payload(
+        snapshot,
+        event_name="signup_completed",
+        payload={"age": "old", "score": 101},
+        mode="block",
+    )
+
+    codes = [violation.code for violation in result["violations"]]
+    assert result["valid"] is False
+    assert "missing_required_property" in codes
+    assert "type_mismatch" in codes
+    assert "max_violation" in codes

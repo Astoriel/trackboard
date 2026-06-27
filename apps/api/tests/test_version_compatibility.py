@@ -47,3 +47,39 @@ def test_compatibility_report_flags_breaking_changes():
     assert "property_type_changed" in codes
     assert "property_became_required" in codes
     assert "enum_value_removed" in codes
+
+
+def test_compatibility_report_flags_removed_events_and_properties():
+    previous_snapshot = {
+        "events": [
+            {
+                "event_name": "signup_completed",
+                "properties": [{"name": "method", "type": "string", "required": False}],
+                "global_properties": [],
+            },
+            {
+                "event_name": "checkout_completed",
+                "properties": [],
+                "global_properties": [],
+            },
+        ],
+        "global_properties": [],
+    }
+    current_snapshot = {
+        "events": [
+            {
+                "event_name": "signup_completed",
+                "properties": [],
+                "global_properties": [],
+            }
+        ],
+        "global_properties": [],
+    }
+
+    service = VersionService(db=None)  # type: ignore[arg-type]
+    report = service._build_compatibility_report(previous_snapshot, current_snapshot)
+
+    assert report["breaking"] is True
+    codes = [check["code"] for check in report["checks"]]
+    assert "event_removed" in codes
+    assert "property_removed" in codes
