@@ -1,6 +1,6 @@
 # Trackboard MCP Server
 
-Trackboard includes a read-only MCP server for local development. It lets AI coding tools inspect the exported tracking contract, retrieve event guidance, generate a TypeScript helper for one event, and validate a proposed payload shape.
+Trackboard includes a read-only MCP server for local development. It lets AI coding tools inspect the exported tracking contract, search for semantically similar events, retrieve event guidance, generate a TypeScript helper for one event, and validate a proposed payload shape.
 
 The server is intentionally narrow in V0:
 
@@ -59,10 +59,11 @@ Add tracking for checkout completion. Use Trackboard to find the correct event a
 Expected tool flow:
 
 1. `search_events`
-2. `get_event_contract`
-3. `get_implementation_guidance`
-4. `get_tracking_helper`
-5. `validate_event_payload`
+2. `search_similar_events`
+3. `get_event_contract`
+4. `get_implementation_guidance`
+5. `get_tracking_helper`
+6. `validate_event_payload`
 
 ## Tools
 
@@ -85,6 +86,29 @@ Input:
 ```json
 { "event_name": "checkout_completed" }
 ```
+
+### `search_similar_events`
+
+Compares a proposed event against the configured local contract using deterministic scoring only. It makes no API, AI, or embedding calls.
+
+Input:
+
+```json
+{
+  "event_name": "order_completed",
+  "description": "User finished an order after payment success",
+  "category": "checkout",
+  "properties": [
+    { "name": "order_id", "type": "string", "required": true },
+    { "name": "total", "type": "float", "required": true },
+    { "name": "currency", "type": "string", "required": true }
+  ],
+  "threshold": 65,
+  "limit": 5
+}
+```
+
+Output includes `candidate_event`, `score`, `label`, `score_breakdown`, and evidence. Labels are `duplicate_likely` at `>= 82`, `possibly_related` at `65-81`, and `weak_signal` at `50-64` when the threshold includes it.
 
 ### `get_implementation_guidance`
 
@@ -133,4 +157,5 @@ Input:
 - The MCP server is local-file only.
 - It exposes no contract publishing or mutation workflow.
 - It does not scan repository source code.
+- Semantic similarity is deterministic and local in V0; it does not use AI explanations.
 - Coverage suggestions are planned separately and are not part of V0.

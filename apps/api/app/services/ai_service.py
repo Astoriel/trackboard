@@ -2,14 +2,13 @@ import json
 from uuid import UUID
 
 from openai import AsyncOpenAI
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.secret_store import decrypt_secret
 from app.models import Organization, TrackingPlan
+from app.services.semantic_consistency import SemanticConsistencyService
 
 
 class AIService:
@@ -49,7 +48,7 @@ class AIService:
     async def generate_schema_from_json(self, json_payload: str, org_id: UUID | None = None) -> dict:
         prompt = f"""
 We have a raw JSON payload representing a tracking event.
-Generate a strictly typed EventSchema representing it. 
+Generate a strictly typed EventSchema representing it.
 Identify the likely event name and category.
 For each property, determine its type (string, integer, float, boolean, array, object) and whether it is realistically required.
 Output strictly as a JSON object:
@@ -79,39 +78,71 @@ Raw Payload:
         return json.loads(response.choices[0].message.content or "{}")
 
     async def analyze_schema_duplicates(self, plan_id: UUID, org_id: UUID | None = None) -> dict:
-        result = await self.db.execute(
-            select(TrackingPlan).options(selectinload(TrackingPlan.events)).where(TrackingPlan.id == plan_id)
-        )
-        plan = result.scalar_one_or_none()
-        if not plan:
+        plan = await self.db.get(TrackingPlan, plan_id)
+        if plan is None:
             raise NotFoundError("Plan")
 
-        events = [{"id": str(e.id), "name": e.event_name, "desc": e.description} for e in plan.events]
-        if len(events) < 2:
-            return {"duplicates": []}
+        findings = await SemanticConsistencyService(self.db).audit_plan(plan_id)
+        duplicates = []
+        for finding in findings:
+            candidate = finding["candidate"]
+            duplicates.append(
+                {
+                    "event_a": finding["event_name"],
+                    "event_b": candidate.event_name,
+                    "confidence": "high" if candidate.label == "duplicate_likely" else "medium",
+                    "reason": "; ".join(item.detail for item in candidate.evidence[:3]),
+                    "score": candidate.score,
+                    "label": candidate.label,
+                    "score_breakdown": candidate.score_breakdown,
+                    "evidence": [
+                        {"kind": item.kind, "detail": item.detail, "weight": item.weight}
+                        for item in candidate.evidence
+                    ],
+                }
+            )
+        return {"duplicates": duplicates}
 
+    async def triage_dlq_issue(self, input_package: dict, org_id: UUID | None = None) -> dict:
         prompt = f"""
-We have {len(events)} tracking events. Identify any pairs that are highly likely to be duplicates or represent the exact same semantic action.
-Output strictly as JSON:
+You are a DLQ analyst for a tracking-plan validation system.
+Use only the evidence in the JSON package. Raw payloads have been removed or redacted.
+Do not infer facts that are not present. Do not recommend sending PII.
+If you recommend a contract change, explain the tradeoff.
+Output JSON only with this shape:
 {{
-  "duplicates": [
+  "summary": "short human summary",
+  "confidence": "low|medium|high",
+  "likely_root_cause": "string",
+  "evidence": ["string"],
+  "recommended_actions": [
     {{
-      "event_a": "name1",
-      "event_b": "name2",
-      "confidence": "high",
-      "reason": "explanation"
+      "kind": "fix_instrumentation|update_contract|investigate_source|ignore_noise",
+      "title": "string",
+      "rationale": "string",
+      "risk": "low|medium|high"
     }}
-  ]
+  ],
+  "questions": ["string"]
 }}
 
-Events list:
-{json.dumps(events, indent=2)}
+Evidence package:
+{json.dumps(input_package, indent=2, sort_keys=True, default=str)}
 """
         client, model = await self._client_for_org(org_id)
         response = await client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You produce evidence-bound JSON triage reports for validation DLQ groups.",
+                },
+                {"role": "user", "content": prompt},
+            ],
             response_format={"type": "json_object"},
             temperature=0.2,
         )
-        return json.loads(response.choices[0].message.content or '{"duplicates": []}')
+        payload = json.loads(response.choices[0].message.content or "{}")
+        if isinstance(payload, dict):
+            payload["_model"] = model
+        return payload

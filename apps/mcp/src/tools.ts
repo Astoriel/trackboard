@@ -4,6 +4,8 @@ import type { ContractStore } from "./contractStore.js";
 import { assertSupportedLanguage, generateTypescriptHelper } from "./codegen.js";
 import { GUIDANCE_SAFETY_PREAMBLE } from "./security.js";
 import { validateEvent } from "./validate.js";
+import { searchSimilarEvents as searchSimilarEventsInContract } from "./consistency.js";
+import type { ProposedEvent } from "./consistency.js";
 
 export interface SearchEventsInput {
   query: string;
@@ -36,6 +38,20 @@ export async function getEventContract(store: ContractStore, input: { event_name
     event,
     merged_properties: store.mergedProperties(contract, event),
     contract_hash: hash,
+  };
+}
+
+export async function searchSimilarEvents(
+  store: ContractStore,
+  input: ProposedEvent & { threshold?: number; limit?: number },
+): Promise<Record<string, unknown>> {
+  const { contract, hash } = await store.load();
+  return {
+    contract_hash: hash,
+    ...searchSimilarEventsInContract(contract, input, {
+      threshold: input.threshold,
+      limit: input.limit,
+    }),
   };
 }
 

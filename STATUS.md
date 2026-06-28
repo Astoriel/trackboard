@@ -17,8 +17,10 @@ The AI-native roadmap extends that same contract artifact to coding agents. The 
 - Working: Guard runtime validation for Segment-compatible `/v1/track` events, HTTP forwarding, single-node SQLite outbox, DLQ, retry worker, metrics, and DLQ replay.
 - Working: optional `implementation_guidance` in exported contract events for agent-aware instrumentation context.
 - Working: local-file read-only MCP server for local/dev AI IDE workflows over exported contracts.
+- In progress: semantic consistency and DLQ triage control-plane surfaces. The web client has route wrappers and UI states for deterministic consistency preview, grouped DLQ issues, and optional AI triage, but backend availability depends on the corresponding API routes being enabled.
 - Planned: UI/API persistence for editing implementation guidance inside Trackboard.
 - Planned: API-backed MCP mode with scoped read tokens.
+- Planned: Guard SQLite DLQ bridge into the control-plane grouped DLQ triage flow.
 - Planned: advisory GitHub coverage suggestions for missing instrumentation; these should not block merges.
 - Planned: hosted demo, wider destination catalog, more SDK targets, a pluggable queue backend for high-throughput Guard deployments, and hardened multi-tenant production operations.
 - Not claimed: Segment Protocols parity, Avo feature parity, enterprise SSO, high-scale SLA, or a hosted commercial service.

@@ -25,6 +25,7 @@ import {
   plansApi,
   propertiesApi,
 } from "@/lib/api";
+import { SemanticConsistencyWarning } from "@/components/schema-editor/SemanticConsistencyWarning";
 import { formatRelative, PROPERTY_TYPES } from "@/lib/utils";
 import { toast } from "@/store/toast";
 
@@ -1377,21 +1378,29 @@ export default function PlanEditorPage() {
           )}
         </div>
 
-        <form method="post" onSubmit={addEvent} className="mt-4 flex gap-3">
-          <input
-            className="input flex-1"
-            placeholder="event_name"
-            value={newEventName}
-            onChange={(event) => setNewEventName(event.target.value)}
+        <form method="post" onSubmit={addEvent} className="mt-4 space-y-3">
+          <SemanticConsistencyWarning
+            planId={plan.id}
+            eventName={newEventName}
             disabled={!isMounted || busyAction === "create-event"}
+            compact
           />
-          <button
-            type="submit"
-            disabled={!isMounted || busyAction === "create-event" || !newEventName.trim()}
-            className="btn-primary"
-          >
-            Add event
-          </button>
+          <div className="flex gap-3">
+            <input
+              className="input flex-1"
+              placeholder="event_name"
+              value={newEventName}
+              onChange={(event) => setNewEventName(event.target.value)}
+              disabled={!isMounted || busyAction === "create-event"}
+            />
+            <button
+              type="submit"
+              disabled={!isMounted || busyAction === "create-event" || !newEventName.trim()}
+              className="btn-primary"
+            >
+              Add event
+            </button>
+          </div>
         </form>
       </div>
 

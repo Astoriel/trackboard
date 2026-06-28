@@ -8,6 +8,7 @@ import {
   getImplementationGuidance,
   getTrackingHelper,
   searchEvents,
+  searchSimilarEvents,
   validateEventPayload,
 } from "./tools.js";
 import { structuredError } from "./security.js";
@@ -35,6 +36,44 @@ server.tool(
     event_name: z.string().min(1),
   },
   async (input) => jsonResponse(await safeTool(() => getEventContract(store, input))),
+);
+
+server.tool(
+  "search_similar_events",
+  "Find deterministic semantic matches for a proposed event against the configured local contract file.",
+  {
+    event_name: z.string().min(1),
+    description: z.string().nullable().optional(),
+    category: z.string().nullable().optional(),
+    status: z.string().optional(),
+    properties: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          type: z.enum(["string", "integer", "float", "boolean", "array", "object"]),
+          required: z.boolean().optional(),
+          constraints: z.record(z.unknown()).optional(),
+          description: z.string().nullable().optional(),
+          examples: z.array(z.unknown()).optional(),
+        }),
+      )
+      .optional(),
+    implementation_guidance: z
+      .object({
+        trigger_when: z.array(z.string()).optional(),
+        do_not_trigger_when: z.array(z.string()).optional(),
+        preferred_location: z.enum(["client", "server", "edge", "mobile", "backend_job", "unknown"]).optional(),
+        required_source: z.string().nullable().optional(),
+        lifecycle_stage: z.string().nullable().optional(),
+        idempotency_key: z.string().nullable().optional(),
+        privacy_notes: z.array(z.string()).optional(),
+      })
+      .nullable()
+      .optional(),
+    threshold: z.number().min(0).max(100).optional(),
+    limit: z.number().int().min(1).max(25).optional(),
+  },
+  async (input) => jsonResponse(await safeTool(() => searchSimilarEvents(store, input))),
 );
 
 server.tool(

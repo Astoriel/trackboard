@@ -1,0 +1,53 @@
+{
+  "format_version": "trackboard.contract.v1",
+  "plan_id": "plan_consistency",
+  "version_id": "version_1",
+  "version_number": 1,
+  "name": "Consistency Fixture",
+  "global_properties": [
+    {
+      "name": "user_id",
+      "type": "string",
+      "required": true,
+      "constraints": {},
+      "description": "Stable user id"
+    }
+  ],
+  "events": [
+    {
+      "event_name": "CheckoutCompleted",
+      "status": "active",
+      "description": "Customer completed checkout after payment success",
+      "category": "checkout",
+      "implementation_guidance": {
+        "trigger_when": ["Payment webhook succeeds"],
+        "do_not_trigger_when": ["Pay button is clicked"],
+        "preferred_location": "server",
+        "required_source": "payment_webhook",
+        "lifecycle_stage": "conversion"
+      },
+      "properties": [
+        { "name": "order_id", "type": "string", "required": true, "constraints": {} },
+        { "name": "total", "type": "float", "required": true, "constraints": {} },
+        { "name": "currency", "type": "string", "required": true, "constraints": { "enum_values": ["EUR", "USD"] } },
+        { "name": "payment_method", "type": "string", "required": false, "constraints": {} }
+      ],
+      "global_properties": ["user_id"]
+    },
+    {
+      "event_name": "signup_completed",
+      "status": "active",
+      "description": "A user completes signup",
+      "category": "activation",
+      "properties": [
+        {
+          "name": "signup_method",
+          "type": "string",
+          "required": true,
+          "constraints": { "enum_values": ["email", "google", "github"] }
+        }
+      ],
+      "global_properties": ["user_id"]
+    }
+  ]
+}

@@ -28,7 +28,7 @@ The AI-native direction is contract-first, not model-first: Trackboard makes con
 
 Trackboard has three connected parts:
 
-- **Control plane:** a FastAPI/Next.js workspace for tracking plans, branches, merge reviews, published versions, API keys, validation, DLQ triage, and code generation.
+- **Control plane:** a FastAPI/Next.js workspace for tracking plans, branches, merge reviews, published versions, API keys, validation, deterministic DLQ grouping, optional AI DLQ triage, and code generation.
 - **Contract toolchain:** a canonical contract export, CLI validation/diff/codegen, and a GitHub Action for PR checks.
 - **Runtime data plane:** Trackboard Guard, a small Go service that accepts Segment-compatible events, validates them against a published contract, forwards accepted events, stores rejected events in SQLite DLQ, and replays fixed events after contract changes.
 - **Agent-aware workflow:** structured `implementation_guidance` on events plus a local read-only MCP server so IDE assistants can find the right event, retrieve guidance, and ask for helper code without mutating tracking plans.
@@ -58,6 +58,8 @@ flowchart LR
 - Branch plans, review merge requests, publish immutable versions, and restore versions.
 - Export canonical `trackboard.contract.v1` JSON from the API.
 - Validate event payloads through API keys and inspect invalid events in DLQ.
+- Use the web app's advisory semantic consistency preview while adding events when the backend consistency route is enabled.
+- View grouped DLQ issues first in Observability; raw payload samples are hidden until explicitly revealed.
 - Run `trackboard validate`, `trackboard diff`, and `trackboard codegen typescript`.
 - Use `actions/contract-check` to fail PRs on breaking contract changes.
 - Generate TypeScript event helper functions from a contract.
@@ -70,6 +72,8 @@ flowchart LR
 - UI/API persistence for editing `implementation_guidance` directly in Trackboard.
 - Read-only API-backed MCP mode in addition to local contract-file mode.
 - Deterministic CLI support for explaining guidance and generating helper snippets for agent workflows.
+- Full event edit and merge-review mounting for semantic consistency warnings.
+- Guard SQLite DLQ export/import or forwarding into the control-plane grouped DLQ triage surface.
 - Advisory GitHub coverage suggestions that may point out missing instrumentation, never block merges.
 - Hosted demo environment.
 - More destination adapters beyond generic HTTP forwarding.

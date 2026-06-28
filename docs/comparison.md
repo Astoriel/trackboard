@@ -35,3 +35,15 @@ That means:
 - Guard does not call a model while accepting or rejecting production events.
 
 Planned GitHub coverage suggestions should remain advisory. They can point out that a PR may be missing an event, but they should not block a merge on model output alone.
+
+## Semantic Consistency And DLQ Triage
+
+Trackboard's consistency and triage direction follows the same split:
+
+- deterministic scoring identifies similar events and explains evidence,
+- optional AI can summarize why the deterministic candidates matter,
+- deterministic fingerprints group DLQ failures,
+- optional AI can turn a grouped failure into a readable incident note,
+- humans still decide whether to reuse an event, fix instrumentation, or update a contract.
+
+This is intentionally different from an AI-only governance layer. AI output is explanatory and suggestive; it is not the source of truth for contract acceptance, runtime validation, replay, or publishing.

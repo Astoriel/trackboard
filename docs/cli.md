@@ -51,3 +51,36 @@ node dist/src/index.js codegen typescript \
 ```
 
 The generated TypeScript includes event payload types and small tracking helper functions.
+
+## Semantic Consistency
+
+```bash
+node dist/src/index.js lint-consistency \
+  --contract ../../examples/contracts/web-analytics.v1.json \
+  --threshold 65
+```
+
+`lint-consistency` runs a deterministic audit over exported `trackboard.contract.v1` JSON and reports event pairs that look semantically similar. The human output includes the event pair, label, score, recommendation, and evidence for each scoring signal.
+
+Use `--json` for stable machine-readable output:
+
+```bash
+node dist/src/index.js lint-consistency \
+  --contract contract.json \
+  --threshold 65 \
+  --json
+```
+
+Labels:
+
+- `duplicate_likely`: score `>= 82`.
+- `possibly_related`: score `65-81`.
+- `weak_signal`: score `50-64`, only shown when the threshold includes it.
+
+Exit codes:
+
+- `0`: audit completed. This is the default even when candidates are found.
+- `2`: `--strict` was set and at least one `duplicate_likely` candidate was found.
+- `64`: CLI usage or parsing error.
+
+The checker is local and deterministic in V0. It does not call the Trackboard API, use AI, mutate contracts, or scan source files.

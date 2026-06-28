@@ -175,6 +175,9 @@ class TrackingPlan(Base):
     invalid_payload_errors: Mapped[list["InvalidPayloadError"]] = relationship(
         back_populates="tracking_plan", lazy="noload", cascade="all, delete-orphan"
     )
+    dlq_triage_reports: Mapped[list["DLQTriageReport"]] = relationship(
+        back_populates="tracking_plan", lazy="noload", cascade="all, delete-orphan"
+    )
     integrations: Mapped[list["Integration"]] = relationship(
         back_populates="tracking_plan", lazy="noload", cascade="all, delete-orphan"
     )
@@ -423,6 +426,41 @@ class InvalidPayloadError(Base):
 
     # relationships
     tracking_plan: Mapped["TrackingPlan"] = relationship(back_populates="invalid_payload_errors")
+
+
+class DLQTriageReport(Base):
+    __tablename__ = "dlq_triage_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tracking_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    group_fingerprint: Mapped[str] = mapped_column(String(80), nullable=False)
+    version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("versions.id"), nullable=True
+    )
+    event_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(80), nullable=False)
+    report: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    redaction_report: Mapped[dict] = mapped_column(JSONB, default=dict)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    tracking_plan: Mapped["TrackingPlan"] = relationship(back_populates="dlq_triage_reports")
+
+    __table_args__ = (
+        Index("idx_dlq_triage_reports_plan_fingerprint", "plan_id", "group_fingerprint"),
+        Index("idx_dlq_triage_reports_plan_created", "plan_id", "created_at"),
+        UniqueConstraint(
+            "plan_id",
+            "group_fingerprint",
+            "input_hash",
+            name="uq_dlq_triage_reports_plan_fingerprint_input",
+        ),
+    )
 
 
 class Integration(Base):

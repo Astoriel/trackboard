@@ -95,6 +95,57 @@ class PropertyResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ConsistencyPropertyInput(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    type: PropertyTypeValue
+    required: bool = False
+    constraints: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConsistencyPreviewRequest(BaseModel):
+    event_name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    category: str | None = Field(None, max_length=100)
+    status: str = "active"
+    properties: list[ConsistencyPropertyInput] = Field(default_factory=list)
+    global_properties: list[str] = Field(default_factory=list)
+    implementation_guidance: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConsistencyEvidenceResponse(BaseModel):
+    kind: str
+    detail: str
+    weight: int
+
+
+class ConsistencyCandidateResponse(BaseModel):
+    event_id: uuid.UUID
+    event_name: str
+    score: int
+    label: Literal["duplicate_likely", "possibly_related", "weak_signal"]
+    recommendation: str
+    score_breakdown: dict[str, int]
+    evidence: list[ConsistencyEvidenceResponse] = Field(default_factory=list)
+
+
+class ConsistencyPreviewResponse(BaseModel):
+    proposed_event_name: str
+    candidate_count: int
+    candidates: list[ConsistencyCandidateResponse] = Field(default_factory=list)
+
+
+class ConsistencyAuditFinding(BaseModel):
+    event_id: uuid.UUID
+    event_name: str
+    candidate: ConsistencyCandidateResponse
+
+
+class ConsistencyAuditResponse(BaseModel):
+    plan_id: uuid.UUID
+    finding_count: int
+    findings: list[ConsistencyAuditFinding] = Field(default_factory=list)
+
+
 class EventCreate(RevisionedRequest):
     event_name: str = Field(min_length=1, max_length=200)
     description: str | None = None
@@ -304,6 +355,59 @@ class InvalidPayloadErrorResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class DLQViolationSummary(BaseModel):
+    code: str
+    path: str
+    property_name: str | None = None
+    expected: Any | None = None
+    actual: Any | None = None
+
+
+class DLQGroupResponse(BaseModel):
+    fingerprint: str
+    event_name: str
+    version_id: uuid.UUID | None = None
+    count: int
+    first_seen_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    top_violation: DLQViolationSummary
+    source_summary: dict[str, Any] = Field(default_factory=dict)
+    sample_count: int
+    has_triage_report: bool = False
+
+
+class DLQGroupListResponse(BaseModel):
+    groups: list[DLQGroupResponse] = Field(default_factory=list)
+
+
+class DLQGroupDetailResponse(DLQGroupResponse):
+    fingerprint_material: dict[str, Any] = Field(default_factory=dict)
+    redacted_samples: list[dict[str, Any]] = Field(default_factory=list)
+    redaction: dict[str, Any] = Field(default_factory=dict)
+
+
+class DLQRecommendedActionResponse(BaseModel):
+    kind: str
+    title: str
+    rationale: str
+    risk: str
+
+
+class DLQTriageResponse(BaseModel):
+    fingerprint: str
+    status: Literal["ready"]
+    summary: str
+    confidence: str
+    evidence: list[str] = Field(default_factory=list)
+    likely_root_cause: str
+    recommended_actions: list[DLQRecommendedActionResponse] = Field(default_factory=list)
+    questions: list[str] = Field(default_factory=list)
+    redaction: dict[str, Any] = Field(default_factory=dict)
+    input_hash: str | None = None
+    model: str | None = None
+    created_at: datetime | None = None
 
 
 class HealthResponse(BaseModel):

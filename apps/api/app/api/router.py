@@ -4,7 +4,9 @@ from app.api.ai import router as ai_router
 from app.api.auth import router as auth_router
 from app.api.codegen import router as codegen_router
 from app.api.comments import router as comments_router
+from app.api.consistency import router as consistency_router
 from app.api.dlq import router as dlq_router
+from app.api.dlq_triage import router as dlq_triage_router
 from app.api.health import router as health_router
 from app.api.merge_requests import router as merge_requests_router
 from app.api.org_settings import router as org_settings_router
@@ -20,7 +22,9 @@ api_router.include_router(validation_router)
 api_router.include_router(versions_router)
 api_router.include_router(codegen_router)
 api_router.include_router(ai_router)
+api_router.include_router(consistency_router)
 api_router.include_router(dlq_router)
+api_router.include_router(dlq_triage_router)
 api_router.include_router(merge_requests_router)
 api_router.include_router(comments_router)
 api_router.include_router(org_settings_router)

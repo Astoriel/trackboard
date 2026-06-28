@@ -92,6 +92,108 @@ export type ValidatePayload = {
   timestamp?: string | null;
 };
 
+export type ConsistencyPropertyInput = {
+  name: string;
+  type?: string;
+  required?: boolean;
+  constraints?: Record<string, unknown>;
+};
+
+export type ConsistencyPreviewPayload = {
+  event_name: string;
+  description?: string | null;
+  category?: string | null;
+  properties?: ConsistencyPropertyInput[];
+  implementation_guidance?: Record<string, unknown> | null;
+};
+
+export type ConsistencyCandidate = {
+  event_id?: string;
+  event_name: string;
+  score: number;
+  label: "duplicate_likely" | "possibly_related" | "weak_signal" | string;
+  recommendation?: string | null;
+  score_breakdown?: Record<string, number>;
+  evidence?: Array<{
+    kind?: string;
+    detail: string;
+    weight?: number;
+  }>;
+};
+
+export type ConsistencyPreviewResponse = {
+  proposed_event_name?: string;
+  candidate_count?: number;
+  candidates: ConsistencyCandidate[];
+};
+
+export type ConsistencyAuditResponse = {
+  candidate_count?: number;
+  candidates?: ConsistencyCandidate[];
+  clusters?: Array<{
+    id?: string;
+    label?: string;
+    events: string[];
+    candidates?: ConsistencyCandidate[];
+  }>;
+};
+
+export type DlqGroup = {
+  fingerprint: string;
+  event_name: string;
+  version_id?: string | null;
+  count: number;
+  first_seen_at?: string | null;
+  last_seen_at?: string | null;
+  top_violation?: {
+    code?: string | null;
+    path?: string | null;
+    property_name?: string | null;
+    expected?: string | null;
+    actual?: string | null;
+  } | null;
+  source_summary?: {
+    source_label?: string | null;
+    app_versions?: string[];
+    platforms?: string[];
+  } | null;
+  sample_count?: number;
+  has_triage_report?: boolean;
+  deterministic_summary?: string | null;
+};
+
+export type DlqGroupDetail = DlqGroup & {
+  fingerprint_material?: Record<string, unknown> & {
+    contract_expectation?: Record<string, unknown> | string | null;
+  };
+  redacted_samples?: Array<Record<string, unknown>>;
+  redaction?: {
+    payload_fields_redacted?: string[];
+    sample_values_redacted?: number;
+  };
+};
+
+export type DlqTriageReport = {
+  fingerprint: string;
+  status?: "ready" | "missing_provider" | "error" | string;
+  summary?: string | null;
+  confidence?: "low" | "medium" | "high" | string | null;
+  evidence?: string[];
+  likely_root_cause?: string | null;
+  recommended_actions?: Array<{
+    kind?: string;
+    title: string;
+    rationale?: string;
+    risk?: "low" | "medium" | "high" | string;
+  }>;
+  questions?: string[];
+  redaction?: {
+    payload_fields_redacted?: string[];
+    sample_values_redacted?: number;
+  };
+  message?: string;
+};
+
 // Auth
 export const authApi = {
   register: (data: { email: string; password: string; name: string; org_name: string }) =>
@@ -231,6 +333,25 @@ export const validationApi = {
 
 export const dlqApi = {
   list: (planId: string) => api.get(`/plans/${planId}/dlq`),
+  groups: (planId: string) => api.get<{ groups: DlqGroup[] }>(`/plans/${planId}/dlq/groups`),
+  group: (planId: string, fingerprint: string) =>
+    api.get<DlqGroupDetail>(`/plans/${planId}/dlq/groups/${encodeURIComponent(fingerprint)}`),
+  triage: (planId: string, fingerprint: string) =>
+    api.post<DlqTriageReport>(
+      `/plans/${planId}/dlq/groups/${encodeURIComponent(fingerprint)}/triage`,
+    ),
+  triageReport: (planId: string, fingerprint: string) =>
+    api.get<DlqTriageReport>(
+      `/plans/${planId}/dlq/groups/${encodeURIComponent(fingerprint)}/triage`,
+    ),
+};
+
+export const consistencyApi = {
+  preview: (planId: string, data: ConsistencyPreviewPayload) =>
+    api.post<ConsistencyPreviewResponse>(`/plans/${planId}/consistency/preview`, data),
+  audit: (planId: string) =>
+    api.get<ConsistencyAuditResponse>(`/plans/${planId}/consistency/audit`),
+  event: (eventId: string) => api.get<ConsistencyPreviewResponse>(`/events/${eventId}/consistency`),
 };
 
 // Versions

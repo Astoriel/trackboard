@@ -7,6 +7,7 @@ import {
   getImplementationGuidance,
   getTrackingHelper,
   searchEvents,
+  searchSimilarEvents,
   validateEventPayload,
 } from "../src/tools.js";
 
@@ -23,6 +24,48 @@ test("get_event_contract returns merged properties and contract hash", async () 
   assert.equal((result.event as { event_name: string }).event_name, "checkout_completed");
   assert.deepEqual(properties.map((prop) => prop.name).sort(), ["currency", "order_id", "total", "user_id"]);
   assert.match(result.contract_hash as string, /^sha256:[a-f0-9]{64}$/);
+});
+
+test("search_similar_events returns deterministic evidence for proposed events", async () => {
+  const result = await searchSimilarEvents(new ContractStore(join(process.cwd(), "fixtures", "consistency.v1.json")), {
+    event_name: "order_completed",
+    description: "User finished an order after payment success",
+    category: "checkout",
+    properties: [
+      { name: "user_id", type: "string", required: true, constraints: {} },
+      { name: "order_id", type: "string", required: true, constraints: {} },
+      { name: "total", type: "float", required: true, constraints: {} },
+      { name: "currency", type: "string", required: true, constraints: { enum_values: ["EUR", "USD"] } },
+      { name: "payment_method", type: "string", required: false, constraints: {} },
+    ],
+    implementation_guidance: {
+      trigger_when: ["Payment webhook succeeds"],
+      do_not_trigger_when: ["Pay button is clicked"],
+      preferred_location: "server",
+      required_source: "payment_webhook",
+      lifecycle_stage: "conversion",
+    },
+    threshold: 65,
+  });
+
+  const candidates = result.candidates as Array<{ candidate_event: string; score: number; label: string; evidence: Array<{ kind: string }> }>;
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].candidate_event, "CheckoutCompleted");
+  assert.equal(candidates[0].label, "duplicate_likely");
+  assert.ok(candidates[0].score >= 82);
+  assert.ok(candidates[0].evidence.some((item) => item.kind === "required_property_overlap"));
+});
+
+test("search_similar_events suppresses unrelated proposed events by threshold", async () => {
+  const result = await searchSimilarEvents(new ContractStore(join(process.cwd(), "fixtures", "consistency.v1.json")), {
+    event_name: "ProductViewed",
+    description: "Customer viewed a product detail page",
+    category: "catalog",
+    properties: [{ name: "product_id", type: "string", required: true, constraints: {} }],
+    threshold: 65,
+  });
+
+  assert.deepEqual(result.candidates, []);
 });
 
 test("get_implementation_guidance wraps guidance with safety preamble", async () => {
