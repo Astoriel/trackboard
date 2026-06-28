@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, GitMerge, RefreshCw } from "lucide-react";
-import { mergeRequestsApi, plansApi } from "@/lib/api";
+import { AlertTriangle, ArrowLeft, GitMerge, RefreshCw } from "lucide-react";
+import {
+  consistencyApi,
+  mergeRequestsApi,
+  plansApi,
+  type ConsistencyAuditFinding,
+} from "@/lib/api";
 import { toast } from "@/store/toast";
 
 interface MergeRequest {
@@ -33,6 +38,17 @@ interface PlanReference {
   branch_name: string | null;
 }
 
+const labelText: Record<string, string> = {
+  duplicate_likely: "Duplicate likely",
+  possibly_related: "Possibly related",
+  weak_signal: "Weak signal",
+};
+
+function formatRecommendation(value?: string | null) {
+  if (!value) return "Needs human review";
+  return value.replace(/_/g, " ");
+}
+
 export default function MergeRequestReviewPage() {
   const { planId, mrId } = useParams<{ planId: string; mrId: string }>();
   const router = useRouter();
@@ -40,6 +56,9 @@ export default function MergeRequestReviewPage() {
   const [mergeRequest, setMergeRequest] = useState<MergeRequest | null>(null);
   const [mainPlan, setMainPlan] = useState<PlanReference | null>(null);
   const [branchPlan, setBranchPlan] = useState<PlanReference | null>(null);
+  const [consistencyFindings, setConsistencyFindings] = useState<ConsistencyAuditFinding[]>([]);
+  const [consistencyLoading, setConsistencyLoading] = useState(false);
+  const [consistencyError, setConsistencyError] = useState("");
   const [merging, setMerging] = useState(false);
 
   useEffect(() => {
@@ -57,6 +76,35 @@ export default function MergeRequestReviewPage() {
         ]);
         setMainPlan(mainResponse.data);
         setBranchPlan(branchResponse.data);
+
+        const changedEventNames = new Set([
+          ...(request.diff_summary?.added_events ?? []),
+          ...(request.diff_summary?.modified_events ?? []).map((event) => event.event_name),
+        ]);
+
+        setConsistencyFindings([]);
+        setConsistencyError("");
+        setConsistencyLoading(false);
+        if (changedEventNames.size > 0) {
+          setConsistencyLoading(true);
+          try {
+            const { data } = await consistencyApi.audit(request.branch_plan_id);
+            setConsistencyFindings(
+              (data.findings ?? [])
+                .filter(
+                  (finding) =>
+                    changedEventNames.has(finding.event_name) ||
+                    changedEventNames.has(finding.candidate.event_name),
+                )
+                .slice(0, 5),
+            );
+          } catch (auditError) {
+            console.error(auditError);
+            setConsistencyError("Semantic consistency audit is not available right now.");
+          } finally {
+            setConsistencyLoading(false);
+          }
+        }
       } catch (error) {
         console.error(error);
         toast.error("Failed to load merge request", "Could not load review details.");
@@ -159,6 +207,77 @@ export default function MergeRequestReviewPage() {
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="card mb-6">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-[-0.035em] text-[var(--text-primary)]">
+              Semantic consistency
+            </h2>
+            <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">
+              Advisory review for added and modified events. Warnings do not block this merge.
+            </p>
+          </div>
+          {mergeRequest.status === "open" && (
+            <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700">
+              Continue anyway allowed
+            </span>
+          )}
+        </div>
+
+        {consistencyLoading ? (
+          <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm font-medium text-[var(--text-secondary)]">
+            <span className="inline-flex items-center gap-2">
+              <RefreshCw size={14} className="animate-spin" />
+              Checking branch events...
+            </span>
+          </div>
+        ) : consistencyError ? (
+          <div className="rounded-[1.25rem] border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-700">
+            {consistencyError}
+          </div>
+        ) : consistencyFindings.length > 0 ? (
+          <div className="space-y-3">
+            {consistencyFindings.map((finding) => (
+              <div
+                key={`${finding.event_id}-${finding.candidate.event_id}`}
+                className="rounded-[1.25rem] border border-amber-500/25 bg-amber-500/10 p-4"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">
+                      {labelText[finding.candidate.label] ?? finding.candidate.label}
+                    </p>
+                    <p className="mt-1 text-xs font-medium leading-5 text-[var(--text-secondary)]">
+                      <span className="font-mono text-[var(--text-primary)]">
+                        {finding.event_name}
+                      </span>{" "}
+                      is similar to{" "}
+                      <span className="font-mono text-[var(--text-primary)]">
+                        {finding.candidate.event_name}
+                      </span>{" "}
+                      with score {finding.candidate.score}. Recommendation:{" "}
+                      {formatRecommendation(finding.candidate.recommendation)}.
+                    </p>
+                    {finding.candidate.evidence?.length ? (
+                      <ul className="mt-2 space-y-1 text-xs font-medium leading-5 text-[var(--text-secondary)]">
+                        {finding.candidate.evidence.slice(0, 2).map((item, index) => (
+                          <li key={`${item.kind ?? "evidence"}-${index}`}>{item.detail}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[1.25rem] border border-dashed p-4 text-sm font-medium text-[var(--text-secondary)]">
+            No semantic warnings found for added or modified events.
+          </div>
+        )}
       </div>
 
       <div className="card">

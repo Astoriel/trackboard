@@ -1122,6 +1122,14 @@ export default function PlanEditorPage() {
                       }
                     }}
                   />
+                  <SemanticConsistencyWarning
+                    planId={plan.id}
+                    eventId={event.id}
+                    eventName={event.event_name}
+                    disabled={!isMounted || busyAction === `update-event-${event.id}`}
+                    compact
+                    className="mt-3"
+                  />
                 </div>
                 <div className="flex items-center gap-1">
                   <button

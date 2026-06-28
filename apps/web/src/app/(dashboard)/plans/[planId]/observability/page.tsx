@@ -16,7 +16,15 @@ import {
   XCircle,
 } from "lucide-react";
 import { useParams } from "next/navigation";
-import { dlqApi, validationApi, type DlqGroup, type DlqGroupDetail, type DlqTriageReport } from "@/lib/api";
+import { ImplementationStatusTable } from "@/components/validation/ImplementationStatusTable";
+import {
+  dlqApi,
+  validationApi,
+  type DlqGroup,
+  type DlqGroupDetail,
+  type DlqTriageReport,
+  type ImplementationStatusEvent,
+} from "@/lib/api";
 
 interface DlqItem {
   id: string;
@@ -133,6 +141,7 @@ export default function ObservabilityPage() {
   const planId = params?.planId;
   const [rawRows, setRawRows] = useState<DlqItem[]>([]);
   const [groups, setGroups] = useState<DlqGroup[]>([]);
+  const [implementationStatus, setImplementationStatus] = useState<ImplementationStatusEvent[]>([]);
   const [stats, setStats] = useState<ValidationStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [groupsUnavailable, setGroupsUnavailable] = useState("");
@@ -150,13 +159,18 @@ export default function ObservabilityPage() {
     if (!planId) return;
 
     try {
-      const [statsResponse, groupedResponse] = await Promise.allSettled([
+      const [statsResponse, implementationResponse, groupedResponse] = await Promise.allSettled([
         validationApi.stats(planId),
+        validationApi.implementationStatus(planId, timeWindow),
         dlqApi.groups(planId),
       ]);
 
       if (statsResponse.status === "fulfilled") {
         setStats(statsResponse.value.data);
+      }
+
+      if (implementationResponse.status === "fulfilled") {
+        setImplementationStatus(implementationResponse.value.data.events ?? []);
       }
 
       if (groupedResponse.status === "fulfilled") {
@@ -173,7 +187,7 @@ export default function ObservabilityPage() {
     } finally {
       setLoading(false);
     }
-  }, [planId]);
+  }, [planId, timeWindow]);
 
   useEffect(() => {
     if (!planId) return;
@@ -336,6 +350,8 @@ export default function ObservabilityPage() {
         </div>
       )}
 
+      <ImplementationStatusTable events={implementationStatus} loading={loading} period={timeWindow} />
+
       <div className="card mb-6">
         <div className="mb-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
           <div>
@@ -344,7 +360,7 @@ export default function ObservabilityPage() {
               Grouped validation issues
             </h2>
             <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">
-              Grouping is deterministic. AI can explain a selected group when a provider is configured.
+          Grouping is deterministic. AI can enrich a selected report when a provider is configured.
             </p>
           </div>
           <div className="text-sm font-medium text-[var(--text-secondary)]">
@@ -458,12 +474,12 @@ export default function ObservabilityPage() {
                     className="btn-primary flex items-center justify-center gap-2"
                     title={
                       group.fingerprint.startsWith("fallback:")
-                        ? "Grouped triage route is required before AI triage can run."
-                        : "Ask AI to triage this grouped issue"
+                        ? "Grouped triage route is required before report generation can run."
+                        : "Generate an evidence-bound triage report for this grouped issue"
                     }
                   >
                     {triage?.loading ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
-                    {triage?.loading ? "Triaging..." : "Ask AI to triage"}
+                    {triage?.loading ? "Triaging..." : "Generate triage report"}
                   </button>
                 </div>
 
@@ -476,7 +492,9 @@ export default function ObservabilityPage() {
                 {triage?.report && (
                   <div className="mt-4 rounded-[1.25rem] border bg-[var(--surface-2)] p-4" style={{ borderColor: "var(--border)" }}>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <span className="section-label">AI explanation</span>
+                      <span className="section-label">
+                        {triage.report.status === "deterministic_only" ? "Deterministic triage" : "AI explanation"}
+                      </span>
                       {triage.report.confidence ? (
                         <span className="outline-pill">{triage.report.confidence} confidence</span>
                       ) : null}

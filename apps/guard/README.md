@@ -17,6 +17,14 @@ Replay fixed DLQ events:
 go run ./cmd/trackboard-guard replay --config ../../examples/guard/guard.local.yaml --limit 100
 ```
 
+Export rejected DLQ events for the Trackboard control plane:
+
+```bash
+go run ./cmd/trackboard-guard dlq export --config ../../examples/guard/guard.local.yaml --format ndjson --limit 100 > guard-dlq.ndjson
+```
+
+The export is read-only and emits one `trackboard.guard.dlq.export.v1` JSON object per line. It does not replay, delete, or repair local DLQ rows.
+
 Endpoints:
 
 - `GET /health/live`

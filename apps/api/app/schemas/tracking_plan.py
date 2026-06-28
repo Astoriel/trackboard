@@ -284,6 +284,28 @@ class ComplianceStats(BaseModel):
     period: str
 
 
+ImplementationEventStatus = Literal["never_seen", "seen_valid", "seen_invalid", "mixed"]
+
+
+class ImplementationStatusEvent(BaseModel):
+    event_name: str
+    status: ImplementationEventStatus
+    valid_count: int
+    invalid_count: int
+    last_seen_at: datetime | None = None
+    last_valid_at: datetime | None = None
+    last_invalid_at: datetime | None = None
+    source_labels: list[str] = Field(default_factory=list)
+    version_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class ImplementationStatusResponse(BaseModel):
+    plan_id: uuid.UUID
+    period: str
+    generated_at: datetime
+    events: list[ImplementationStatusEvent] = Field(default_factory=list)
+
+
 class PublishPlanRequest(RevisionedRequest):
     summary: str | None = None
     allow_breaking: bool = False
@@ -357,6 +379,25 @@ class InvalidPayloadErrorResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class GuardDLQImportRecord(BaseModel):
+    schema_version: Literal["trackboard.guard.dlq.export.v1"]
+    source: str = Field(default="trackboard-guard", max_length=100)
+    guard_dlq_id: str = Field(min_length=1, max_length=300)
+    idempotency_key: str = Field(min_length=1, max_length=300)
+    event_name: str = Field(min_length=1, max_length=200)
+    severity: str = Field(default="blocked", max_length=40)
+    reason_codes: list[str] = Field(default_factory=list)
+    payload: dict[str, Any]
+    replay_status: str = Field(default="pending", max_length=40)
+    created_at: datetime | None = None
+
+
+class GuardDLQImportResponse(BaseModel):
+    imported: int
+    skipped: int
+    upserted_errors: int
+
+
 class DLQViolationSummary(BaseModel):
     code: str
     path: str
@@ -397,7 +438,7 @@ class DLQRecommendedActionResponse(BaseModel):
 
 class DLQTriageResponse(BaseModel):
     fingerprint: str
-    status: Literal["ready"]
+    status: Literal["ready", "deterministic_only"]
     summary: str
     confidence: str
     evidence: list[str] = Field(default_factory=list)

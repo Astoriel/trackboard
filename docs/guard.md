@@ -37,6 +37,43 @@ go run ./cmd/trackboard-guard replay --config ../../examples/guard/guard.local.y
 
 Replay scans pending DLQ rows, validates each payload against the current contract, queues valid events back into the outbox, and keeps still-invalid events in the DLQ with refreshed reason codes.
 
+## DLQ Export
+
+```bash
+go run ./cmd/trackboard-guard dlq export --config ../../examples/guard/guard.local.yaml --format ndjson --limit 100 > guard-dlq.ndjson
+```
+
+Export scans pending rejected DLQ rows and writes newline-delimited JSON without mutating Guard SQLite state. Each line uses this shape:
+
+```json
+{
+  "schema_version": "trackboard.guard.dlq.export.v1",
+  "source": "trackboard-guard",
+  "guard_dlq_id": "message-id:dlq",
+  "idempotency_key": "message-id",
+  "event_name": "signup_completed",
+  "severity": "blocked",
+  "reason_codes": ["enum_violation"],
+  "payload": {
+    "event": "signup_completed",
+    "properties": {
+      "method": "twitter"
+    }
+  },
+  "replay_status": "pending",
+  "created_at": "2026-06-28T10:15:00Z"
+}
+```
+
+The control plane accepts the export at:
+
+```http
+POST /api/v1/plans/{plan_id}/dlq/import
+Content-Type: application/x-ndjson
+```
+
+The same route also accepts a JSON array or `{ "records": [...] }`. Imports create invalid validation-log rows with source label `guard-dlq-import` and upsert `InvalidPayloadError` rows so existing DLQ grouping can see them. Reposting the same Guard DLQ id for the same plan is skipped rather than counted twice.
+
 ## Scale Boundary
 
 The v1 storage path is intentionally local-first. SQLite keeps setup simple and durable, but it is not the right queue for multi-node or extreme-throughput ingestion. The intended upgrade path is a pluggable queue store backed by Postgres, Redis Streams, NATS JetStream, or Kafka while keeping the same validation/policy/forwarding interfaces.

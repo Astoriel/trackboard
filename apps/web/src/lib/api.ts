@@ -127,15 +127,16 @@ export type ConsistencyPreviewResponse = {
   candidates: ConsistencyCandidate[];
 };
 
+export type ConsistencyAuditFinding = {
+  event_id: string;
+  event_name: string;
+  candidate: ConsistencyCandidate;
+};
+
 export type ConsistencyAuditResponse = {
-  candidate_count?: number;
-  candidates?: ConsistencyCandidate[];
-  clusters?: Array<{
-    id?: string;
-    label?: string;
-    events: string[];
-    candidates?: ConsistencyCandidate[];
-  }>;
+  plan_id?: string;
+  finding_count?: number;
+  findings: ConsistencyAuditFinding[];
 };
 
 export type DlqGroup = {
@@ -175,7 +176,7 @@ export type DlqGroupDetail = DlqGroup & {
 
 export type DlqTriageReport = {
   fingerprint: string;
-  status?: "ready" | "missing_provider" | "error" | string;
+  status?: "ready" | "deterministic_only" | "missing_provider" | "error" | string;
   summary?: string | null;
   confidence?: "low" | "medium" | "high" | string | null;
   evidence?: string[];
@@ -192,6 +193,27 @@ export type DlqTriageReport = {
     sample_values_redacted?: number;
   };
   message?: string;
+};
+
+export type ImplementationEventStatus = "never_seen" | "seen_valid" | "seen_invalid" | "mixed";
+
+export type ImplementationStatusEvent = {
+  event_name: string;
+  status: ImplementationEventStatus;
+  valid_count: number;
+  invalid_count: number;
+  last_seen_at?: string | null;
+  last_valid_at?: string | null;
+  last_invalid_at?: string | null;
+  source_labels: string[];
+  version_ids: string[];
+};
+
+export type ImplementationStatusResponse = {
+  plan_id: string;
+  period: string;
+  generated_at: string;
+  events: ImplementationStatusEvent[];
 };
 
 // Auth
@@ -329,6 +351,10 @@ export const validationApi = {
     api.post("/validate/batch", { events }, { headers: { "X-API-Key": apiKey } }),
   stats: (planId: string, period = "24h") =>
     api.get(`/plans/${planId}/validate/stats?period=${period}`),
+  implementationStatus: (planId: string, period = "all") =>
+    api.get<ImplementationStatusResponse>(
+      `/plans/${planId}/implementation-status?period=${encodeURIComponent(period)}`,
+    ),
 };
 
 export const dlqApi = {

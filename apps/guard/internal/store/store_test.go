@@ -118,6 +118,9 @@ func TestStoreEnqueueDLQ(t *testing.T) {
 	if len(pending) != 1 || pending[0].ID != "dlq_1" {
 		t.Fatalf("pending = %#v", pending)
 	}
+	if pending[0].CreatedAt.IsZero() {
+		t.Fatal("pending DLQ row did not include created_at")
+	}
 	if err := store.UpdateDLQReasons(ctx, "dlq_1", `["missing_required_property"]`); err != nil {
 		t.Fatal(err)
 	}

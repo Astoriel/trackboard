@@ -31,6 +31,7 @@ type DLQEvent struct {
 	ReasonCodesJSON string
 	PayloadJSON     string
 	ReplayStatus    string
+	CreatedAt       time.Time
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -199,7 +200,7 @@ func (s *Store) DLQDepth(ctx context.Context) (int, error) {
 func (s *Store) PendingDLQ(ctx context.Context, limit int) ([]DLQEvent, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, idempotency_key, event_name, severity, reason_codes_json, payload_json, replay_status
+		`SELECT id, idempotency_key, event_name, severity, reason_codes_json, payload_json, replay_status, created_at
 		 FROM dlq_events
 		 WHERE replay_status = 'pending'
 		 ORDER BY created_at ASC
@@ -213,9 +214,15 @@ func (s *Store) PendingDLQ(ctx context.Context, limit int) ([]DLQEvent, error) {
 	events := []DLQEvent{}
 	for rows.Next() {
 		var event DLQEvent
-		if err := rows.Scan(&event.ID, &event.IdempotencyKey, &event.EventName, &event.Severity, &event.ReasonCodesJSON, &event.PayloadJSON, &event.ReplayStatus); err != nil {
+		var createdAt string
+		if err := rows.Scan(&event.ID, &event.IdempotencyKey, &event.EventName, &event.Severity, &event.ReasonCodesJSON, &event.PayloadJSON, &event.ReplayStatus, &createdAt); err != nil {
 			return nil, err
 		}
+		parsedCreatedAt, err := parseTime(createdAt)
+		if err != nil {
+			return nil, err
+		}
+		event.CreatedAt = parsedCreatedAt
 		events = append(events, event)
 	}
 	return events, rows.Err()

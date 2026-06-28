@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
+from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
 from app.config import settings
+from app.core.exceptions import BadRequestError
 from app.services.ai_service import AIService
+from app.services.dlq_grouping import DLQIssueGroup
+from app.services.dlq_triage_service import DLQTriageService
 from tests.helpers import (
     auth_headers,
     create_event,
@@ -15,6 +21,97 @@ from tests.helpers import (
     publish_plan,
     register_user,
 )
+
+
+class _FakeDLQGrouping:
+    def __init__(self, group):
+        self.group = group
+
+    async def get_group(self, plan_id, fingerprint):
+        del plan_id, fingerprint
+        return self.group
+
+
+class _MissingProviderAI:
+    async def triage_dlq_issue(self, input_package, org_id=None):
+        del input_package, org_id
+        raise BadRequestError(
+            "AI provider is not configured.",
+            code="ai_provider_not_configured",
+        )
+
+
+class _FakeDB:
+    def __init__(self):
+        self.added = False
+
+    async def get(self, model, record_id):
+        del model, record_id
+        return SimpleNamespace(org_id=uuid4())
+
+    def add(self, row):
+        del row
+        self.added = True
+
+    async def flush(self):
+        raise AssertionError("deterministic-only reports should not be stored")
+
+
+@pytest.mark.asyncio
+async def test_dlq_triage_service_falls_back_to_deterministic_report_without_ai_provider():
+    plan_id = uuid4()
+    fingerprint = "sha256:test"
+    group = DLQIssueGroup(
+        fingerprint=fingerprint,
+        fingerprint_material={
+            "contract_expectation": {
+                "property_name": "tier",
+                "type": "integer",
+                "required": True,
+                "constraints": {},
+            },
+        },
+        event_name="CheckoutCompleted",
+        version_id=uuid4(),
+        count=2,
+        first_seen_at=datetime(2026, 6, 28, 10, 0, tzinfo=timezone.utc),
+        last_seen_at=datetime(2026, 6, 28, 10, 5, tzinfo=timezone.utc),
+        top_violation={
+            "code": "type_mismatch",
+            "path": "properties.tier",
+            "property_name": "tier",
+            "expected": "integer",
+            "actual": "string",
+        },
+        source_summary={"source_label": "ios-app", "app_versions": ["3.14.0"]},
+        sample_count=1,
+        redacted_samples=[{"tier": "premium", "email": "[REDACTED:email]"}],
+        redaction_report={"payload_fields_redacted": ["email"], "sample_values_redacted": 1},
+    )
+    db = _FakeDB()
+    service = DLQTriageService(db)  # type: ignore[arg-type]
+    service.grouping = _FakeDLQGrouping(group)  # type: ignore[assignment]
+    service.ai = _MissingProviderAI()  # type: ignore[assignment]
+
+    async def no_cached_report(plan_id, fingerprint, input_hash):
+        del plan_id, fingerprint, input_hash
+        return None
+
+    service._get_cache = no_cached_report  # type: ignore[method-assign]
+
+    report = await service.triage_group(plan_id=plan_id, fingerprint=fingerprint, created_by=uuid4())
+
+    assert report["status"] == "deterministic_only"
+    assert report["fingerprint"] == fingerprint
+    assert report["model"] is None
+    assert report["input_hash"].startswith("sha256:")
+    assert report["confidence"] == "high"
+    assert "CheckoutCompleted" in report["summary"]
+    assert "tier" in report["likely_root_cause"]
+    assert any("Contract expectation" in item for item in report["evidence"])
+    assert any("Source summary" in item for item in report["evidence"])
+    assert report["redaction"]["payload_fields_redacted"] == ["email"]
+    assert db.added is False
 
 
 async def _plan_with_invalid_dlq(client):
@@ -105,8 +202,27 @@ async def test_dlq_group_routes_work_without_ai_provider(client, monkeypatch):
         f"/api/v1/plans/{plan['id']}/dlq/groups/{group['fingerprint']}/triage",
         headers=auth_headers(identity["token"]),
     )
-    assert triage.status_code == 400
-    assert triage.json()["code"] == "ai_provider_not_configured"
+    assert triage.status_code == 200, triage.text
+    triage_payload = triage.json()
+    assert triage_payload["status"] == "deterministic_only"
+    assert triage_payload["fingerprint"] == group["fingerprint"]
+    assert triage_payload["model"] is None
+    assert triage_payload["input_hash"].startswith("sha256:")
+    assert "CheckoutCompleted" in triage_payload["summary"]
+    assert "tier" in triage_payload["likely_root_cause"]
+    assert triage_payload["confidence"] == "high"
+    assert triage_payload["evidence"]
+    assert any("Contract expectation" in item for item in triage_payload["evidence"])
+    assert any("Source summary" in item for item in triage_payload["evidence"])
+    assert triage_payload["recommended_actions"]
+    assert triage_payload["questions"]
+    assert triage_payload["redaction"]["sample_values_redacted"] >= 2
+
+    uncached = await client.get(
+        f"/api/v1/plans/{plan['id']}/dlq/groups/{group['fingerprint']}/triage",
+        headers=auth_headers(identity["token"]),
+    )
+    assert uncached.status_code == 404
 
 
 @pytest.mark.asyncio

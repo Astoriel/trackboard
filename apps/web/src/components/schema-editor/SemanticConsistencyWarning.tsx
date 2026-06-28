@@ -7,15 +7,18 @@ import {
   type ConsistencyCandidate,
   type ConsistencyPreviewPayload,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type Props = {
   planId: string;
+  eventId?: string;
   eventName: string;
   description?: string | null;
   category?: string | null;
   properties?: ConsistencyPreviewPayload["properties"];
   disabled?: boolean;
   compact?: boolean;
+  className?: string;
 };
 
 const labelText: Record<string, string> = {
@@ -31,12 +34,14 @@ function formatRecommendation(value?: string | null) {
 
 export function SemanticConsistencyWarning({
   planId,
+  eventId,
   eventName,
   description,
   category,
   properties,
   disabled = false,
   compact = false,
+  className,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -62,12 +67,14 @@ export function SemanticConsistencyWarning({
       setLoading(true);
       setError("");
       try {
-        const { data } = await consistencyApi.preview(planId, {
-          event_name: normalizedName,
-          description: description ?? null,
-          category: category ?? null,
-          properties: properties ?? [],
-        });
+        const { data } = eventId
+          ? await consistencyApi.event(eventId)
+          : await consistencyApi.preview(planId, {
+              event_name: normalizedName,
+              description: description ?? null,
+              category: category ?? null,
+              properties: properties ?? [],
+            });
 
         if (!cancelled) {
           setCandidates(data.candidates ?? []);
@@ -93,7 +100,7 @@ export function SemanticConsistencyWarning({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [category, description, disabled, dismissedName, normalizedName, planId, properties]);
+  }, [category, description, disabled, dismissedName, eventId, normalizedName, planId, properties]);
 
   if (!normalizedName || dismissedName === normalizedName) {
     return null;
@@ -101,7 +108,12 @@ export function SemanticConsistencyWarning({
 
   if (loading) {
     return (
-      <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm font-medium text-[var(--text-secondary)]">
+      <div
+        className={cn(
+          "rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm font-medium text-[var(--text-secondary)]",
+          className,
+        )}
+      >
         <span className="inline-flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" />
           Checking for similar events...
@@ -112,7 +124,12 @@ export function SemanticConsistencyWarning({
 
   if (error) {
     return (
-      <div className="rounded-[1.25rem] border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-700">
+      <div
+        className={cn(
+          "rounded-[1.25rem] border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-700",
+          className,
+        )}
+      >
         {error}
       </div>
     );
@@ -125,7 +142,7 @@ export function SemanticConsistencyWarning({
   const topCandidate = visibleCandidates[0];
 
   return (
-    <div className="rounded-[1.25rem] border border-amber-500/25 bg-amber-500/10 p-4">
+    <div className={cn("rounded-[1.25rem] border border-amber-500/25 bg-amber-500/10 p-4", className)}>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex items-start gap-2">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
@@ -139,7 +156,8 @@ export function SemanticConsistencyWarning({
                 {topCandidate.event_name}
               </span>{" "}
               with score {topCandidate.score}. Recommendation:{" "}
-              {formatRecommendation(topCandidate.recommendation)}.
+              {formatRecommendation(topCandidate.recommendation)}. This is advisory and will not
+              block the current edit.
             </p>
           </div>
         </div>

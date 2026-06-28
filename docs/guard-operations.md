@@ -36,10 +36,34 @@ When `destination` is an `http://` or `https://` URL, Guard starts a local forwa
 4. Watch the queued/retained counts.
 5. Retained events need either data repair or another contract update.
 
+## DLQ Control-Plane Import Procedure
+
+Use this flow when operators need rejected Guard rows to appear in the Trackboard control plane for DLQ grouping and triage.
+
+1. Export pending rejected rows from the Guard host:
+
+```bash
+trackboard-guard dlq export --config guard.yaml --format ndjson --limit 100 > guard-dlq.ndjson
+```
+
+2. Transfer the file through an approved secure channel. The file contains event payloads and should be handled as production telemetry.
+3. Import the file into the control plane:
+
+```bash
+curl -X POST "https://trackboard.example/api/v1/plans/{plan_id}/dlq/import" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/x-ndjson" \
+  --data-binary @guard-dlq.ndjson
+```
+
+The import route also accepts a JSON array or `{ "records": [...] }`. It writes `ValidationLog` and `InvalidPayloadError` compatible rows with source label `guard-dlq-import`, uses the latest published plan version when one exists, and skips duplicate Guard DLQ ids for the same plan. It does not replay events, mutate Guard SQLite state, call AI, or publish contract changes.
+
 ## Failure Boundaries
 
 - If the destination is down, accepted events remain in the outbox and are retried.
 - If an event violates the contract in `block` mode, it is written to DLQ.
 - If replay still fails validation, the event remains in DLQ.
+- DLQ export is read-only and includes only rows whose Guard replay status is still `pending`.
+- DLQ import is a visibility bridge. It does not prove that the payload still violates the latest contract.
 - Concurrent Guard workers lease SQLite rows with a short transaction. This is safe for a local queue, but at very high write/read concurrency workers can contend on SQLite locks.
 - Guard does not yet provide vendor-specific batching or authentication adapters.

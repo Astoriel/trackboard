@@ -8,6 +8,7 @@ from app.api.consistency import router as consistency_router
 from app.api.dlq import router as dlq_router
 from app.api.dlq_triage import router as dlq_triage_router
 from app.api.health import router as health_router
+from app.api.implementation_status import router as implementation_status_router
 from app.api.merge_requests import router as merge_requests_router
 from app.api.org_settings import router as org_settings_router
 from app.api.plans import router as plans_router
@@ -19,6 +20,7 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 api_router.include_router(plans_router)
 api_router.include_router(validation_router)
+api_router.include_router(implementation_status_router)
 api_router.include_router(versions_router)
 api_router.include_router(codegen_router)
 api_router.include_router(ai_router)

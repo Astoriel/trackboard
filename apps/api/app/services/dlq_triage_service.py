@@ -5,7 +5,8 @@ import json
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, ValidationError as PydanticValidationError
+from pydantic import BaseModel, Field
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,7 +70,13 @@ class DLQTriageService:
 
         plan = await self.db.get(TrackingPlan, plan_id)
         org_id = plan.org_id if plan is not None else None
-        raw_report = await self.ai.triage_dlq_issue(input_package, org_id=org_id)
+        try:
+            raw_report = await self.ai.triage_dlq_issue(input_package, org_id=org_id)
+        except BadRequestError as exc:
+            if exc.code != "ai_provider_not_configured":
+                raise
+            return self._deterministic_report_response(group, input_package, input_hash)
+
         try:
             validated = DLQAIReport.model_validate(raw_report)
         except PydanticValidationError as exc:
@@ -139,6 +146,220 @@ class DLQTriageService:
     def _input_hash(self, input_package: dict[str, Any]) -> str:
         canonical = json.dumps(input_package, sort_keys=True, separators=(",", ":"), default=str)
         return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
+
+    def _deterministic_report_response(
+        self,
+        group: DLQIssueGroup,
+        input_package: dict[str, Any],
+        input_hash: str,
+    ) -> dict[str, Any]:
+        violation = input_package.get("top_violation") or {}
+        expectation = input_package.get("contract_expectation")
+        source_summary = input_package.get("source_summary") or {}
+        redaction = input_package.get("redaction") or {}
+
+        report = {
+            "fingerprint": group.fingerprint,
+            "status": "deterministic_only",
+            "summary": self._deterministic_summary(group, violation, expectation, source_summary),
+            "confidence": self._deterministic_confidence(violation, expectation),
+            "likely_root_cause": self._deterministic_root_cause(violation, expectation),
+            "evidence": self._deterministic_evidence(group, violation, expectation, source_summary, redaction),
+            "recommended_actions": self._deterministic_actions(violation, expectation, source_summary),
+            "questions": self._deterministic_questions(violation, source_summary),
+            "redaction": redaction,
+            "input_hash": input_hash,
+            "model": None,
+            "created_at": None,
+        }
+        return report
+
+    def _deterministic_summary(
+        self,
+        group: DLQIssueGroup,
+        violation: dict[str, Any],
+        expectation: dict[str, Any] | None,
+        source_summary: dict[str, Any],
+    ) -> str:
+        path = violation.get("path") or "payload"
+        property_name = violation.get("property_name") or path
+        source = source_summary.get("source_label")
+        source_clause = f" from {source}" if source else ""
+        if expectation and expectation.get("type"):
+            expected = expectation["type"]
+            actual = violation.get("actual") or "unknown"
+            return (
+                f"{group.count} {group.event_name} event(s){source_clause} are failing at {path}: "
+                f"{property_name} is {actual}, but the contract expects {expected}."
+            )
+        return f"{group.count} {group.event_name} event(s){source_clause} are failing validation at {path}."
+
+    def _deterministic_confidence(
+        self,
+        violation: dict[str, Any],
+        expectation: dict[str, Any] | None,
+    ) -> str:
+        if violation.get("code") and violation.get("path") and expectation:
+            return "high"
+        if violation.get("code") and violation.get("path"):
+            return "medium"
+        return "low"
+
+    def _deterministic_root_cause(
+        self,
+        violation: dict[str, Any],
+        expectation: dict[str, Any] | None,
+    ) -> str:
+        code = str(violation.get("code") or "validation_error")
+        path = violation.get("path") or "payload"
+        property_name = violation.get("property_name") or path
+        expected_type = expectation.get("type") if expectation else violation.get("expected")
+        actual = violation.get("actual") or "unknown"
+
+        if code == "type_mismatch" and expected_type:
+            return (
+                f"Instrumentation is sending {property_name} as {actual}, while the published contract "
+                f"expects {expected_type}."
+            )
+        if code in {"missing_required_property", "required_property_missing"}:
+            return f"Instrumentation appears to omit required contract property {property_name}."
+        if code in {"enum_violation", "invalid_enum_value"}:
+            return f"Instrumentation is sending a value for {property_name} that is outside the contract constraints."
+        if expected_type:
+            return f"Payload shape at {path} does not match the published contract expectation for {property_name}."
+        return f"Payload shape at {path} does not match the validator's recorded expectation."
+
+    def _deterministic_evidence(
+        self,
+        group: DLQIssueGroup,
+        violation: dict[str, Any],
+        expectation: dict[str, Any] | None,
+        source_summary: dict[str, Any],
+        redaction: dict[str, Any],
+    ) -> list[str]:
+        evidence = [
+            (
+                f"{group.count} rejected {group.event_name} event(s) in the observed window "
+                f"{self._format_time(group.first_seen_at)} to {self._format_time(group.last_seen_at)}."
+            ),
+            (
+                f"Top violation is {violation.get('code') or 'validation_error'} at "
+                f"{violation.get('path') or 'payload'}."
+            ),
+        ]
+
+        if expectation:
+            evidence.append(self._format_expectation(expectation))
+        if source_summary:
+            evidence.append(self._format_source_summary(source_summary))
+        if redaction:
+            evidence.append(self._format_redaction(redaction))
+
+        return [item for item in evidence if item]
+
+    def _deterministic_actions(
+        self,
+        violation: dict[str, Any],
+        expectation: dict[str, Any] | None,
+        source_summary: dict[str, Any],
+    ) -> list[dict[str, str]]:
+        path = violation.get("path") or "payload"
+        property_name = violation.get("property_name") or path
+        source = source_summary.get("source_label") or "the emitting source"
+        actions = [
+            {
+                "kind": "fix_instrumentation",
+                "title": f"Align {property_name} with the published contract",
+                "rationale": self._instrumentation_rationale(violation, expectation),
+                "risk": "low",
+            },
+            {
+                "kind": "investigate_source",
+                "title": f"Inspect {source} payload construction",
+                "rationale": "The group fingerprint points to the same validation path and source metadata.",
+                "risk": "low",
+            },
+        ]
+        if expectation:
+            actions.append(
+                {
+                    "kind": "update_contract",
+                    "title": "Review whether the contract expectation is still correct",
+                    "rationale": "Only change the tracking plan if the observed payload behavior is intentional.",
+                    "risk": "medium",
+                }
+            )
+        return actions
+
+    def _deterministic_questions(
+        self,
+        violation: dict[str, Any],
+        source_summary: dict[str, Any],
+    ) -> list[str]:
+        property_name = violation.get("property_name") or violation.get("path") or "this payload path"
+        questions = [f"Did {property_name} intentionally change in the emitting instrumentation?"]
+        app_versions = source_summary.get("app_versions") or []
+        if app_versions:
+            questions.append(f"Did the affected app version(s) {', '.join(map(str, app_versions[:5]))} ship a payload change?")
+        else:
+            questions.append("Which release or source change first introduced this validation failure?")
+        return questions
+
+    def _instrumentation_rationale(
+        self,
+        violation: dict[str, Any],
+        expectation: dict[str, Any] | None,
+    ) -> str:
+        if expectation and expectation.get("type"):
+            return (
+                f"The validator recorded {violation.get('actual') or 'unknown'} at "
+                f"{violation.get('path') or 'payload'}, while the contract type is {expectation['type']}."
+            )
+        return f"The validator recorded repeated failures at {violation.get('path') or 'payload'}."
+
+    def _format_time(self, value: Any) -> str:
+        return value.isoformat() if value else "unknown"
+
+    def _format_expectation(self, expectation: dict[str, Any]) -> str:
+        property_name = expectation.get("property_name") or "property"
+        expected_type = expectation.get("type") or "unspecified"
+        required = expectation.get("required", False)
+        constraints = expectation.get("constraints") or {}
+        constraint_text = self._format_constraints(constraints)
+        suffix = f"; constraints: {constraint_text}" if constraint_text else ""
+        return f"Contract expectation for {property_name}: type={expected_type}, required={required}{suffix}."
+
+    def _format_constraints(self, constraints: dict[str, Any]) -> str:
+        parts: list[str] = []
+        for key in sorted(constraints)[:5]:
+            value = constraints[key]
+            if isinstance(value, list):
+                parts.append(f"{key}({len(value)} value(s))")
+            elif isinstance(value, dict):
+                parts.append(f"{key}({len(value)} key(s))")
+            else:
+                parts.append(f"{key}={value}")
+        return ", ".join(parts)
+
+    def _format_source_summary(self, source_summary: dict[str, Any]) -> str:
+        parts: list[str] = []
+        if source_summary.get("source_label"):
+            parts.append(f"source={source_summary['source_label']}")
+        for key in ("app_versions", "platforms", "libraries"):
+            values = source_summary.get(key) or []
+            if values:
+                parts.append(f"{key}={', '.join(map(str, values[:5]))}")
+        if not parts and source_summary.get("source_labels"):
+            labels = source_summary["source_labels"]
+            parts.append(f"source_labels={', '.join(sorted(map(str, labels))[:5])}")
+        return f"Source summary: {'; '.join(parts)}." if parts else ""
+
+    def _format_redaction(self, redaction: dict[str, Any]) -> str:
+        fields = redaction.get("payload_fields_redacted") or []
+        count = redaction.get("sample_values_redacted") or 0
+        if fields:
+            return f"Redaction removed {count} sensitive sample value(s) from fields: {', '.join(map(str, fields[:8]))}."
+        return f"Redaction report recorded {count} sensitive sample value(s) removed."
 
     def _report_response(self, report: DLQTriageReport) -> dict[str, Any]:
         payload = {
