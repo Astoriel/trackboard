@@ -27,9 +27,20 @@ finally {
 Push-Location (Join-Path $root "apps/cli")
 try {
   Invoke-Native npm ci
+  Invoke-Native npm audit --audit-level=moderate
   Invoke-Native npm test
   Invoke-Native node dist/src/index.js validate --contract ../../examples/contracts/web-analytics.v1.json --event ../../examples/events/signup.valid.json
   Invoke-Native node dist/src/index.js diff ../../examples/contracts/web-analytics.v1.json ../../examples/contracts/web-analytics.v1.json
+}
+finally {
+  Pop-Location
+}
+
+Push-Location (Join-Path $root "apps/web")
+try {
+  Invoke-Native npm ci
+  Invoke-Native npm audit --audit-level=moderate
+  Invoke-Native npm run build
 }
 finally {
   Pop-Location
