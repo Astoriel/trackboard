@@ -21,14 +21,15 @@ type Contract struct {
 }
 
 type Event struct {
-	EventName        string     `json:"event_name"`
-	Status           string     `json:"status"`
-	Description      *string    `json:"description"`
-	Category         *string    `json:"category"`
-	SortOrder        int        `json:"sort_order"`
-	Properties       []Property `json:"properties"`
-	GlobalProperties []string   `json:"global_properties"`
-	propertyIndex    map[string]Property
+	EventName              string                  `json:"event_name"`
+	Status                 string                  `json:"status"`
+	Description            *string                 `json:"description"`
+	Category               *string                 `json:"category"`
+	SortOrder              int                     `json:"sort_order"`
+	ImplementationGuidance *ImplementationGuidance `json:"implementation_guidance"`
+	Properties             []Property              `json:"properties"`
+	GlobalProperties       []string                `json:"global_properties"`
+	propertyIndex          map[string]Property
 }
 
 type Property struct {
@@ -38,6 +39,23 @@ type Property struct {
 	Constraints map[string]any `json:"constraints"`
 	Description *string        `json:"description"`
 	Examples    []any          `json:"examples"`
+}
+
+type ImplementationGuidance struct {
+	TriggerWhen       []string      `json:"trigger_when"`
+	DoNotTriggerWhen  []string      `json:"do_not_trigger_when"`
+	PreferredLocation string        `json:"preferred_location"`
+	RequiredSource    *string       `json:"required_source"`
+	LifecycleStage    *string       `json:"lifecycle_stage"`
+	IdempotencyKey    *string       `json:"idempotency_key"`
+	PrivacyNotes      []string      `json:"privacy_notes"`
+	CodeExamples      []CodeExample `json:"code_examples"`
+}
+
+type CodeExample struct {
+	Language  string  `json:"language"`
+	Framework *string `json:"framework"`
+	Snippet   string  `json:"snippet"`
 }
 
 func (c Contract) Event(name string) (Event, bool) {

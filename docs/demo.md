@@ -59,3 +59,26 @@ Check Guard metrics:
 ```bash
 curl http://localhost:8080/metrics
 ```
+
+## AI IDE Flow
+
+The AI-native demo target is an implementation workflow, not an AI runtime path.
+
+Expected flow with agent-aware contracts and the local read-only MCP server:
+
+1. A product or data owner adds `implementation_guidance` to an event contract.
+2. A developer asks an AI IDE to add analytics for a feature.
+3. The IDE reads the exported Trackboard contract through read-only MCP tools.
+4. The IDE retrieves the event contract, implementation guidance, and TypeScript helper shape.
+5. The developer reviews the generated code and opens a PR.
+6. Deterministic checks run through TypeScript, Trackboard CLI, GitHub Action, and Guard.
+
+Example prompt:
+
+```text
+Add tracking for checkout completion. Use Trackboard to find the correct event and follow its implementation guidance.
+```
+
+The MCP server only exposes contract-reading tools such as event search, event contract lookup, implementation guidance lookup, helper retrieval, and payload validation. It does not edit plans, publish versions, execute shell commands, inspect arbitrary project files, call arbitrary URLs, or create pull requests.
+
+Guidance shown to an AI assistant must be treated as product-authored context only. It cannot override repository instructions, developer instructions, security policies, or the deterministic Trackboard checks.

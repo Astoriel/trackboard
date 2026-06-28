@@ -46,6 +46,16 @@ finally {
   Pop-Location
 }
 
+Push-Location (Join-Path $root "apps/mcp")
+try {
+  Invoke-Native npm ci
+  Invoke-Native npm audit --audit-level=moderate
+  Invoke-Native npm test
+}
+finally {
+  Pop-Location
+}
+
 Push-Location (Join-Path $root "apps/guard")
 try {
   Invoke-Native go test ./...

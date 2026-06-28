@@ -71,17 +71,18 @@ def build_contract_payload(version: Version) -> dict[str, Any]:
 def _sorted_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     normalized = []
     for index, event in enumerate(events):
-        normalized.append(
-            {
-                "event_name": event.get("event_name"),
-                "status": event.get("status", "active"),
-                "description": event.get("description"),
-                "category": event.get("category"),
-                "sort_order": event.get("sort_order", index),
-                "properties": _sorted_properties(event.get("properties", [])),
-                "global_properties": sorted(event.get("global_properties", [])),
-            }
-        )
+        normalized_event = {
+            "event_name": event.get("event_name"),
+            "status": event.get("status", "active"),
+            "description": event.get("description"),
+            "category": event.get("category"),
+            "sort_order": event.get("sort_order", index),
+            "properties": _sorted_properties(event.get("properties", [])),
+            "global_properties": sorted(event.get("global_properties", [])),
+        }
+        if event.get("implementation_guidance") is not None:
+            normalized_event["implementation_guidance"] = deepcopy(event["implementation_guidance"])
+        normalized.append(normalized_event)
     return sorted(normalized, key=lambda item: item["event_name"] or "")
 
 

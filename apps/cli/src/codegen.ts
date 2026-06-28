@@ -26,6 +26,7 @@ export function generateTypescript(contractInput: TrackboardContract): string {
   chunks.push("}", "");
   for (const event of contract.events) {
     const name = toPascalCase(event.event_name);
+    chunks.push(...guidanceComment(event.event_name, event.implementation_guidance));
     chunks.push(`export function track${name}(`);
     chunks.push("  client: TrackboardClient,");
     chunks.push(`  properties: ${name}Properties,`);
@@ -34,6 +35,42 @@ export function generateTypescript(contractInput: TrackboardContract): string {
     chunks.push("}", "");
   }
   return `${chunks.join("\n")}\n`;
+}
+
+function guidanceComment(
+  eventName: string,
+  guidance: TrackboardContract["events"][number]["implementation_guidance"],
+): string[] {
+  const lines = [
+    "/**",
+    ` * Track ${sanitizeCommentText(eventName)}.`,
+  ];
+  const triggerWhen = guidance?.trigger_when ?? [];
+  if (triggerWhen.length > 0) {
+    lines.push(" *", " * Trigger when:");
+    for (const item of triggerWhen) {
+      lines.push(` * - ${sanitizeCommentText(item)}`);
+    }
+  }
+  const doNotTriggerWhen = guidance?.do_not_trigger_when ?? [];
+  if (doNotTriggerWhen.length > 0) {
+    lines.push(" *", " * Do not trigger when:");
+    for (const item of doNotTriggerWhen) {
+      lines.push(` * - ${sanitizeCommentText(item)}`);
+    }
+  }
+  lines.push(" */");
+  return lines;
+}
+
+function sanitizeCommentText(value: string): string {
+  return value
+    .replace(/\*\//g, "* /")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[<>]/g, "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .trim()
+    .slice(0, 500);
 }
 
 function tsType(prop: ContractProperty): string {

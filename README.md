@@ -18,9 +18,11 @@
 
 ## Project Status
 
-Active product prototype. Snapshot date: 2026-06-27. See [STATUS.md](STATUS.md) and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for the release boundary.
+Active product prototype. Snapshot date: 2026-06-28. See [STATUS.md](STATUS.md) and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for the release boundary.
 
 Trackboard is positioned as a self-hosted, open-source alternative to hosted tracking-plan tools such as Avo. The useful v1 surface is intentionally narrow: define event contracts, review changes before they break analytics, generate typed helpers, and validate production events close to the edge.
+
+The AI-native direction is contract-first, not model-first: Trackboard makes contracts understandable to AI coding agents while keeping correctness enforced by deterministic tooling. Agent-aware contract guidance and a local read-only MCP server are available for exported contracts; Trackboard Guard does not run AI in the runtime event path.
 
 ## What It Is
 
@@ -29,6 +31,7 @@ Trackboard has three connected parts:
 - **Control plane:** a FastAPI/Next.js workspace for tracking plans, branches, merge reviews, published versions, API keys, validation, DLQ triage, and code generation.
 - **Contract toolchain:** a canonical contract export, CLI validation/diff/codegen, and a GitHub Action for PR checks.
 - **Runtime data plane:** Trackboard Guard, a small Go service that accepts Segment-compatible events, validates them against a published contract, forwards accepted events, stores rejected events in SQLite DLQ, and replays fixed events after contract changes.
+- **Agent-aware workflow:** structured `implementation_guidance` on events plus a local read-only MCP server so IDE assistants can find the right event, retrieve guidance, and ask for helper code without mutating tracking plans.
 
 The product is for teams that have outgrown spreadsheets and Notion tracking plans, but do not want analytics metadata locked in a SaaS-only workflow.
 
@@ -40,6 +43,8 @@ flowchart LR
   API --> Export["Canonical contract export"]
   Export --> CLI["CLI: validate, diff, codegen"]
   CLI --> Action["GitHub PR check"]
+  Export --> MCP["Read-only MCP server"]
+  MCP -. context only .-> IDE["AI IDE"]
   Export --> Guard["Trackboard Guard"]
   Guard --> Destination["Analytics destination"]
   Guard --> DLQ["SQLite DLQ"]
@@ -57,13 +62,33 @@ flowchart LR
 - Use `actions/contract-check` to fail PRs on breaking contract changes.
 - Generate TypeScript event helper functions from a contract.
 - Run Trackboard Guard as a Segment-compatible ingestion service with durable outbox, DLQ, retries, metrics, and replay.
+- Add optional `implementation_guidance` to exported contracts.
+- Run a local read-only MCP server over an exported contract for AI IDE workflows.
 
 ## Planned
 
+- UI/API persistence for editing `implementation_guidance` directly in Trackboard.
+- Read-only API-backed MCP mode in addition to local contract-file mode.
+- Deterministic CLI support for explaining guidance and generating helper snippets for agent workflows.
+- Advisory GitHub coverage suggestions that may point out missing instrumentation, never block merges.
 - Hosted demo environment.
 - More destination adapters beyond generic HTTP forwarding.
 - Broader generated SDKs beyond TypeScript.
 - Team/enterprise features such as SSO, approvals, and audit workflows.
+
+## Agent-Aware Contracts
+
+The optional `implementation_guidance` field is human-authored contract data for developers and AI IDEs. It can describe when to trigger an event, when not to trigger it, the preferred implementation location, required source of truth, idempotency key, privacy notes, and short code examples.
+
+Security boundary:
+
+- AI-facing tools are read-only in v0.
+- MCP must not publish versions, edit plans, execute shell commands, inspect arbitrary files, or call arbitrary URLs.
+- Guidance is context data, not trusted instruction. It must not override system, developer, repository, or security policies.
+- CI, generated types, API validation, and Guard remain deterministic.
+- Guard validates events at runtime without model calls.
+
+See [MCP](docs/mcp.md) for the local read-only server.
 
 ## Quick Start
 
@@ -185,6 +210,7 @@ go test ./...
 
 - [Contract format](docs/contracts.md)
 - [CLI](docs/cli.md)
+- [MCP](docs/mcp.md)
 - [GitHub Action](docs/github-action.md)
 - [Guard](docs/guard.md)
 - [Guard operations](docs/guard-operations.md)

@@ -1,0 +1,91 @@
+{
+  "format_version": "trackboard.contract.v1",
+  "plan_id": "plan_web",
+  "version_id": "version_1",
+  "version_number": 1,
+  "name": "Web Analytics",
+  "description": "Core product analytics contract",
+  "published_at": "2026-06-27T12:00:00Z",
+  "global_properties": [
+    {
+      "name": "user_id",
+      "type": "string",
+      "required": true,
+      "constraints": {},
+      "description": "Stable application user id",
+      "examples": ["usr_123"]
+    }
+  ],
+  "events": [
+    {
+      "event_name": "checkout_completed",
+      "status": "active",
+      "description": "A user completes checkout",
+      "category": "checkout",
+      "implementation_guidance": {
+        "trigger_when": ["Payment provider confirms the checkout session"],
+        "do_not_trigger_when": ["Pay button is clicked", "Payment modal opens"],
+        "preferred_location": "server",
+        "required_source": "payment_webhook",
+        "lifecycle_stage": "conversion",
+        "idempotency_key": "checkout_session_id",
+        "privacy_notes": ["Do not include full card data."],
+        "code_examples": [
+          {
+            "language": "typescript",
+            "framework": "node",
+            "snippet": "await trackCheckoutCompleted(client, { user_id, order_id, total, currency });"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "order_id",
+          "type": "string",
+          "required": true,
+          "constraints": {},
+          "description": "Order identifier",
+          "examples": ["ord_123"]
+        },
+        {
+          "name": "total",
+          "type": "float",
+          "required": true,
+          "constraints": {},
+          "description": "Checkout total",
+          "examples": [42.5]
+        },
+        {
+          "name": "currency",
+          "type": "string",
+          "required": true,
+          "constraints": {
+            "enum_values": ["EUR", "USD"]
+          },
+          "description": "ISO currency code",
+          "examples": ["USD"]
+        }
+      ],
+      "global_properties": ["user_id"]
+    },
+    {
+      "event_name": "signup_completed",
+      "status": "active",
+      "description": "A user completes signup",
+      "category": "activation",
+      "properties": [
+        {
+          "name": "signup_method",
+          "type": "string",
+          "required": true,
+          "constraints": {
+            "enum_values": ["email", "google", "github"]
+          },
+          "description": "Signup method selected by the user",
+          "examples": ["google"]
+        }
+      ],
+      "global_properties": ["user_id"]
+    }
+  ]
+}

@@ -22,6 +22,29 @@
       "status": "active",
       "description": "User completed signup",
       "category": "activation",
+      "implementation_guidance": {
+        "trigger_when": [
+          "Signup API returns success and the user account is persisted"
+        ],
+        "do_not_trigger_when": [
+          "Signup form is submitted",
+          "Client-side validation passes"
+        ],
+        "preferred_location": "server",
+        "required_source": "signup_api",
+        "lifecycle_stage": "activation",
+        "idempotency_key": "user_id",
+        "privacy_notes": [
+          "Do not include raw passwords or OAuth tokens"
+        ],
+        "code_examples": [
+          {
+            "language": "typescript",
+            "framework": "node",
+            "snippet": "await trackSignupCompleted(client, { user_id, signup_method })"
+          }
+        ]
+      },
       "properties": [
         {
           "name": "signup_method",
