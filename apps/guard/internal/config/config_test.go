@@ -9,7 +9,7 @@ import (
 func TestLoadConfig(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "guard.yaml")
-	err := os.WriteFile(path, []byte("http_addr: \":9090\"\ncontract_file: \"contract.json\"\nstore_file: \"guard.db\"\ndestination: \"http://example.test/track\"\nready: true\n"), 0o600)
+	err := os.WriteFile(path, []byte("http_addr: \":9090\"\ncontract_file: \"contract.json\"\nstore_file: \"guard.db\"\ndestination: \"http://example.test/track\"\nworker_count: 2\nready: true\n"), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,6 +30,9 @@ func TestLoadConfig(t *testing.T) {
 	}
 	if cfg.Destination != "http://example.test/track" {
 		t.Fatalf("Destination = %q", cfg.Destination)
+	}
+	if cfg.WorkerCount != 2 {
+		t.Fatalf("WorkerCount = %d", cfg.WorkerCount)
 	}
 	if !cfg.Ready {
 		t.Fatal("Ready = false")

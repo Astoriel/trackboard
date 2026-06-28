@@ -6,21 +6,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/astoriel/trackboard/apps/guard/internal/config"
 	"github.com/astoriel/trackboard/apps/guard/internal/contract"
+	"github.com/astoriel/trackboard/apps/guard/internal/forwarder"
 	"github.com/astoriel/trackboard/apps/guard/internal/health"
 	"github.com/astoriel/trackboard/apps/guard/internal/ingest"
 	"github.com/astoriel/trackboard/apps/guard/internal/metrics"
 	"github.com/astoriel/trackboard/apps/guard/internal/policy"
+	"github.com/astoriel/trackboard/apps/guard/internal/runtime"
 	"github.com/astoriel/trackboard/apps/guard/internal/store"
 	"github.com/astoriel/trackboard/apps/guard/internal/validator"
 )
 
 type Server struct {
-	httpServer *http.Server
-	eventStore *store.Store
+	httpServer   *http.Server
+	eventStore   *store.Store
+	workerCancel context.CancelFunc
 }
 
 func New(cfg config.Config) *Server {
@@ -39,6 +43,16 @@ func New(cfg config.Config) *Server {
 			eventStore = opened
 		}
 	}
+	var workerCancel context.CancelFunc
+	if eventStore != nil && isHTTPDestination(cfg.Destination) {
+		workerCtx, cancel := context.WithCancel(context.Background())
+		workerCancel = cancel
+		go runtime.WorkerPool{
+			Store:       eventStore,
+			Sender:      forwarder.NewSegment(cfg.Destination),
+			WorkerCount: cfg.WorkerCount,
+		}.Run(workerCtx)
+	}
 	guardMetrics := metrics.New()
 	mux.HandleFunc("GET /health/live", healthHandler.Live)
 	mux.HandleFunc("GET /health/ready", healthHandler.Ready)
@@ -51,8 +65,13 @@ func New(cfg config.Config) *Server {
 			Handler:           mux,
 			ReadHeaderTimeout: 5 * time.Second,
 		},
-		eventStore: eventStore,
+		eventStore:   eventStore,
+		workerCancel: workerCancel,
 	}
+}
+
+func isHTTPDestination(destination string) bool {
+	return strings.HasPrefix(destination, "http://") || strings.HasPrefix(destination, "https://")
 }
 
 func trackHandler(cache *contract.Cache, eventStore *store.Store, destination string, mode policy.Mode, guardMetrics *metrics.Metrics) http.HandlerFunc {
@@ -162,6 +181,9 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.workerCancel != nil {
+		s.workerCancel()
+	}
 	err := s.httpServer.Shutdown(ctx)
 	if s.eventStore != nil {
 		if closeErr := s.eventStore.Close(); err == nil {

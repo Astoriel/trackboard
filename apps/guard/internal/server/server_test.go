@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/astoriel/trackboard/apps/guard/internal/config"
 	"github.com/astoriel/trackboard/apps/guard/internal/store"
@@ -59,6 +61,40 @@ func TestTrackEndpointQueuesValidEventsInOutbox(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	assertDepths(t, storePath, 1, 0)
+}
+
+func TestTrackEndpointForwardsValidEventsToDestination(t *testing.T) {
+	contractPath := writeServerContract(t)
+	storePath := dbPath(t)
+	var received atomic.Int32
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/track" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		received.Add(1)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer destination.Close()
+	srv := New(config.Config{HTTPAddr: ":0", ContractFile: contractPath, StoreFile: storePath, Destination: destination.URL + "/track", Mode: "block", WorkerCount: 1})
+	defer shutdownServer(t, srv)
+	req := httptest.NewRequest(http.MethodPost, "/v1/track", strings.NewReader(`{
+		"event":"signup_completed",
+		"userId":"usr_123",
+		"messageId":"msg_forwarded",
+		"properties":{"user_id":"usr_123","signup_method":"google"}
+	}`))
+
+	srv.httpServer.Handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if received.Load() == 1 {
+			assertDepths(t, storePath, 0, 0)
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("destination received %d events", received.Load())
 }
 
 func TestMetricsEndpointReportsAcceptedAndBlockedEvents(t *testing.T) {

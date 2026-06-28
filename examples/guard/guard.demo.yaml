@@ -1,0 +1,7 @@
+http_addr: ":8080"
+contract_file: "examples/contracts/web-analytics.v1.json"
+store_file: "examples/guard/guard.demo.db"
+destination: "http://localhost:9000/track"
+worker_count: 1
+ready: true
+mode: "block"

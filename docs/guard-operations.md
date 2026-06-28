@@ -15,6 +15,8 @@ ready: true
 mode: "block"
 ```
 
+When `destination` is an `http://` or `https://` URL, Guard starts a local forwarding worker. The worker leases due rows from the SQLite outbox and sends them to the configured destination.
+
 ## Metrics
 
 `GET /metrics` returns plain counters for:

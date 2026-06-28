@@ -13,16 +13,18 @@ type Config struct {
 	ContractFile string
 	StoreFile    string
 	Destination  string
+	WorkerCount  int
 	Ready        bool
 	Mode         string
 }
 
 func Default() Config {
 	return Config{
-		HTTPAddr:  ":8080",
-		StoreFile: "guard.db",
-		Ready:     false,
-		Mode:      "block",
+		HTTPAddr:    ":8080",
+		StoreFile:   "guard.db",
+		WorkerCount: 1,
+		Ready:       false,
+		Mode:        "block",
 	}
 }
 
@@ -55,6 +57,12 @@ func Load(path string) (Config, error) {
 			cfg.StoreFile = value
 		case "destination":
 			cfg.Destination = value
+		case "worker_count":
+			workerCount, err := strconv.Atoi(value)
+			if err != nil {
+				return cfg, fmt.Errorf("invalid worker_count value: %w", err)
+			}
+			cfg.WorkerCount = workerCount
 		case "ready":
 			ready, err := strconv.ParseBool(value)
 			if err != nil {

@@ -1,0 +1,7 @@
+http_addr: ":8080"
+contract_file: "/contracts/web-analytics.v1.json"
+store_file: "/data/guard.db"
+destination: "http://fake-destination:9000/track"
+worker_count: 1
+ready: true
+mode: "block"

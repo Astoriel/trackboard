@@ -10,7 +10,7 @@ Trackboard Guard is the runtime data plane. It validates Segment-compatible `/v1
 - Forward accepted events to an HTTP destination.
 - Store accepted events in a durable single-node SQLite outbox before forwarding.
 - Store rejected events in a single-node SQLite DLQ.
-- Retry failed forwarding attempts.
+- Run a local worker that leases outbox rows, forwards them, and retries failed delivery attempts.
 - Expose health and metrics endpoints.
 - Replay fixed DLQ events after the contract is updated.
 

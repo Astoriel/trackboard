@@ -64,5 +64,34 @@ services:
     depends_on:
       - api
 
+  fake-destination:
+    image: node:22-alpine
+    working_dir: /app
+    command: ["node", "server.js"]
+    volumes:
+      - ./examples/fake-destination:/app:ro
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9000/health"]
+      interval: 5s
+      retries: 5
+
+  guard:
+    build:
+      context: ./apps/guard
+      dockerfile: Dockerfile
+    command: ["--config", "/config/guard.compose.yaml"]
+    volumes:
+      - ./examples/contracts:/contracts:ro
+      - ./examples/guard/guard.compose.yaml:/config/guard.compose.yaml:ro
+      - guarddata:/data
+    ports:
+      - "8080:8080"
+    depends_on:
+      fake-destination:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  guarddata:

@@ -126,6 +126,20 @@ Replay fixed DLQ events after updating the contract:
 go run ./cmd/trackboard-guard replay --config ../../examples/guard/guard.local.yaml --limit 100
 ```
 
+## End-to-End Demo
+
+Run Guard with a fake analytics destination and verify that a valid event is forwarded while an invalid event is blocked:
+
+```powershell
+.\scripts\demo-guard-e2e.ps1
+```
+
+Docker Compose can run the same runtime demo:
+
+```bash
+docker compose up --build guard fake-destination
+```
+
 ## Backend Install
 
 Use Python 3.12 and PostgreSQL. SQLite is not the serious backend path.
@@ -174,5 +188,6 @@ go test ./...
 - [GitHub Action](docs/github-action.md)
 - [Guard](docs/guard.md)
 - [Guard operations](docs/guard-operations.md)
+- [End-to-end demo](docs/demo.md)
 - [Product comparison](docs/comparison.md)
 - [API reference](docs/api-reference.md)
