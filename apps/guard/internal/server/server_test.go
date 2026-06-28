@@ -88,8 +88,7 @@ func TestTrackEndpointForwardsValidEventsToDestination(t *testing.T) {
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if received.Load() == 1 {
-			assertDepths(t, storePath, 0, 0)
+		if received.Load() == 1 && depthsMatch(t, srv.eventStore, 0, 0) {
 			return
 		}
 		time.Sleep(25 * time.Millisecond)
@@ -157,6 +156,19 @@ func assertDepths(t *testing.T, storePath string, outbox int, dlq int) {
 	if actualOutbox != outbox || actualDLQ != dlq {
 		t.Fatalf("depths outbox=%d dlq=%d", actualOutbox, actualDLQ)
 	}
+}
+
+func depthsMatch(t *testing.T, db *store.Store, outbox int, dlq int) bool {
+	t.Helper()
+	actualOutbox, err := db.QueueDepth(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualDLQ, err := db.DLQDepth(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return actualOutbox == outbox && actualDLQ == dlq
 }
 
 func shutdownServer(t *testing.T, srv *Server) {

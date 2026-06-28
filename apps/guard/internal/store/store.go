@@ -43,6 +43,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	// leasing predictable under SQLite's writer locking model; high-throughput
 	// multi-node deployments should use a stronger queue backend.
 	db.SetMaxOpenConns(1)
+	if _, err := db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	store := &Store{db: db}
 	if err := store.migrate(ctx); err != nil {
 		_ = db.Close()
