@@ -38,6 +38,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Guard's SQLite store is a local single-node queue. One open connection keeps
+	// leasing predictable under SQLite's writer locking model; high-throughput
+	// multi-node deployments should use a stronger queue backend.
 	db.SetMaxOpenConns(1)
 	store := &Store{db: db}
 	if err := store.migrate(ctx); err != nil {

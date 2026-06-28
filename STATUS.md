@@ -12,8 +12,8 @@ Trackboard is a full-stack tracking plan manager with a FastAPI backend, Next.js
 - Working: canonical `trackboard.contract.v1` export from published plans.
 - Working: CLI validation, contract diff, breaking-change detection, and TypeScript code generation.
 - Working: GitHub Action wrapper that reports breaking/safe/informational changes in PR summaries.
-- Working: Guard runtime validation for Segment-compatible `/v1/track` events, HTTP forwarding, SQLite outbox, DLQ, retry worker, metrics, and DLQ replay.
-- Planned: hosted demo, wider destination catalog, more SDK targets, and hardened multi-tenant production operations.
+- Working: Guard runtime validation for Segment-compatible `/v1/track` events, HTTP forwarding, single-node SQLite outbox, DLQ, retry worker, metrics, and DLQ replay.
+- Planned: hosted demo, wider destination catalog, more SDK targets, a pluggable queue backend for high-throughput Guard deployments, and hardened multi-tenant production operations.
 - Not claimed: Segment Protocols parity, Avo feature parity, enterprise SSO, high-scale SLA, or a hosted commercial service.
 
 ## Release Boundary
