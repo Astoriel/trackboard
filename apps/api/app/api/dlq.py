@@ -19,6 +19,7 @@ from app.schemas.tracking_plan import (
     InvalidPayloadErrorResponse,
 )
 from app.services.snapshot_service import SnapshotService
+from app.services.validation_engine import validate_payload
 
 router = APIRouter(tags=["dlq"])
 
@@ -69,12 +70,13 @@ async def import_guard_dlq_errors(
             continue
 
         seen_at = _record_seen_at(record)
+        is_valid, errors, error_reason = _revalidate_imported_record(record, latest_version.snapshot if latest_version else None)
         validation_log = ValidationLog(
             plan_id=plan_id,
             event_name=record.event_name,
             payload=record.payload,
-            is_valid=False,
-            errors=_record_errors(record),
+            is_valid=is_valid,
+            errors=errors,
             version_id=version_id,
             api_key_id=None,
             request_id=request_id,
@@ -85,18 +87,19 @@ async def import_guard_dlq_errors(
         db.add(validation_log)
         await db.flush()
 
-        await _upsert_imported_invalid_payload(
-            db,
-            plan_id=plan_id,
-            version_id=version_id,
-            validation_log_id=validation_log.id,
-            event_name=record.event_name,
-            payload=record.payload,
-            error_reason=_error_reason(record),
-            seen_at=seen_at,
-        )
+        if not is_valid:
+            await _upsert_imported_invalid_payload(
+                db,
+                plan_id=plan_id,
+                version_id=version_id,
+                validation_log_id=validation_log.id,
+                event_name=record.event_name,
+                payload=record.payload,
+                error_reason=error_reason,
+                seen_at=seen_at,
+            )
+            upserted_errors += 1
         imported += 1
-        upserted_errors += 1
 
     return GuardDLQImportResponse(
         imported=imported,
@@ -190,6 +193,31 @@ def _record_errors(record: GuardDLQImportRecord) -> list[dict]:
         }
         for code in reason_codes
     ]
+
+
+def _revalidate_imported_record(
+    record: GuardDLQImportRecord,
+    snapshot: dict | None,
+) -> tuple[bool, list[dict], str]:
+    if snapshot is None:
+        return False, _record_errors(record), _error_reason(record)
+
+    result = validate_payload(
+        snapshot,
+        event_name=record.event_name,
+        payload=_record_validation_properties(record),
+        mode="block",
+    )
+    errors = [violation.model_dump(mode="json") for violation in result["violations"]]
+    error_reason = "; ".join(violation.message for violation in result["violations"])
+    return bool(result["valid"]), errors, error_reason or _error_reason(record)
+
+
+def _record_validation_properties(record: GuardDLQImportRecord) -> dict:
+    properties = record.payload.get("properties")
+    if isinstance(properties, dict):
+        return properties
+    return record.payload
 
 
 def _error_reason(record: GuardDLQImportRecord) -> str:

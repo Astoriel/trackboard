@@ -105,4 +105,4 @@ When grouped DLQ routes are enabled, Observability starts from issue groups inst
 5. If an AI provider is configured, use `Ask AI to triage` on one group to request an evidence-bound explanation and suggested actions.
 6. Reveal samples only when needed. Redacted samples are preferred; raw payload display remains behind an explicit action.
 
-The current Guard SQLite DLQ is a separate runtime queue. Control-plane triage only sees rows that reach the API DLQ path until a Guard export/import or forwarding bridge is added.
+The Guard SQLite DLQ is a local runtime queue. Use `trackboard-guard dlq export` and `POST /api/v1/plans/{plan_id}/dlq/import` to bring pending rejected rows into the control plane, where they are revalidated against the latest published contract before grouping and triage.

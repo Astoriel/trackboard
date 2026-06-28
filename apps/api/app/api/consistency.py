@@ -19,6 +19,7 @@ from app.schemas.tracking_plan import (
     ConsistencyPreviewResponse,
 )
 from app.services.semantic_consistency import ConsistencyCandidate, SemanticConsistencyService
+from app.services.merge_service import MergeService
 
 router = APIRouter(tags=["consistency"])
 
@@ -68,6 +69,43 @@ async def audit_consistency(
     findings = await SemanticConsistencyService(db).audit_plan(plan_id)
     return ConsistencyAuditResponse(
         plan_id=plan_id,
+        finding_count=len(findings),
+        findings=[
+            ConsistencyAuditFinding(
+                event_id=UUID(finding["event_id"]),
+                event_name=finding["event_name"],
+                candidate=_candidate_response(finding["candidate"]),
+            )
+            for finding in findings
+        ],
+    )
+
+
+@router.get(
+    "/merge-requests/{mr_id}/consistency",
+    response_model=ConsistencyAuditResponse,
+)
+async def merge_request_consistency(
+    mr_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    merge_request = await MergeService(db).get_merge_request(mr_id)
+    await resolve_plan_access(db, user_id=current_user.id, plan_id=merge_request.main_plan_id)
+    diff_summary = getattr(merge_request, "diff_summary", {}) or {}
+    changed_event_names = set(diff_summary.get("added_events") or [])
+    changed_event_names.update(
+        event.get("event_name")
+        for event in diff_summary.get("modified_events") or []
+        if event.get("event_name")
+    )
+    findings = await SemanticConsistencyService(db).merge_request_consistency(
+        main_plan_id=merge_request.main_plan_id,
+        branch_plan_id=merge_request.branch_plan_id,
+        changed_event_names=changed_event_names,
+    )
+    return ConsistencyAuditResponse(
+        plan_id=merge_request.branch_plan_id,
         finding_count=len(findings),
         findings=[
             ConsistencyAuditFinding(

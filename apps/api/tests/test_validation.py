@@ -127,7 +127,7 @@ async def test_validation_success_and_block_mode_dlq_aggregation(client):
 
 
 @pytest.mark.asyncio
-async def test_guard_dlq_import_upserts_for_grouping_without_duplicate_reimport(client):
+async def test_guard_dlq_import_revalidates_against_latest_contract_for_grouping(client):
     identity, plan, published, _ = await _published_plan_with_key(client)
     record = {
         "schema_version": "trackboard.guard.dlq.export.v1",
@@ -136,7 +136,7 @@ async def test_guard_dlq_import_upserts_for_grouping_without_duplicate_reimport(
         "idempotency_key": "msg_1",
         "event_name": "signup_completed",
         "severity": "blocked",
-        "reason_codes": ["enum_violation"],
+        "reason_codes": ["guard_runtime_reject"],
         "payload": {
             "event": "signup_completed",
             "messageId": "msg_1",
@@ -190,7 +190,55 @@ async def test_guard_dlq_import_upserts_for_grouping_without_duplicate_reimport(
     assert group["event_name"] == "signup_completed"
     assert group["count"] == 1
     assert group["top_violation"]["code"] == "enum_violation"
+    assert group["top_violation"]["path"] == "properties.method"
     assert group["source_summary"]["source_label"] == "guard-dlq-import"
+
+
+@pytest.mark.asyncio
+async def test_guard_dlq_import_does_not_group_payload_that_now_matches_latest_contract(client):
+    identity, plan, _published, _ = await _published_plan_with_key(client)
+    record = {
+        "schema_version": "trackboard.guard.dlq.export.v1",
+        "source": "trackboard-guard",
+        "guard_dlq_id": "msg_valid_now:dlq",
+        "idempotency_key": "msg_valid_now",
+        "event_name": "signup_completed",
+        "severity": "blocked",
+        "reason_codes": ["stale_guard_contract"],
+        "payload": {
+            "event": "signup_completed",
+            "messageId": "msg_valid_now",
+            "properties": {"method": "email"},
+        },
+        "replay_status": "pending",
+        "created_at": "2026-06-28T10:20:00Z",
+    }
+
+    imported = await client.post(
+        f"/api/v1/plans/{plan['id']}/dlq/import",
+        content=json.dumps(record) + "\n",
+        headers={
+            **auth_headers(identity["token"]),
+            "Content-Type": "application/x-ndjson",
+        },
+    )
+    assert imported.status_code == 200, imported.text
+    assert imported.json() == {"imported": 1, "skipped": 0, "upserted_errors": 0}
+
+    dlq = await client.get(
+        f"/api/v1/plans/{plan['id']}/dlq",
+        headers=auth_headers(identity["token"]),
+    )
+    assert dlq.status_code == 200, dlq.text
+    assert dlq.json() == []
+
+    stats = await client.get(
+        f"/api/v1/plans/{plan['id']}/validate/stats",
+        headers=auth_headers(identity["token"]),
+    )
+    assert stats.status_code == 200, stats.text
+    assert stats.json()["valid_count"] == 1
+    assert stats.json()["invalid_count"] == 0
 
 
 @pytest.mark.asyncio

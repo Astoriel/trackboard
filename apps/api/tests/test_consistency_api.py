@@ -16,7 +16,15 @@ from app.services.semantic_consistency import (
     EventProfile,
     SemanticConsistencyService,
 )
-from tests.helpers import auth_headers, create_event, create_plan, create_property, register_user
+from tests.helpers import (
+    auth_headers,
+    create_branch,
+    create_event,
+    create_merge_request,
+    create_plan,
+    create_property,
+    register_user,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -282,3 +290,126 @@ async def test_audit_event_and_legacy_ai_analyze_routes(client: AsyncClient) -> 
     )
     assert legacy.status_code == 200, legacy.text
     assert legacy.json()["duplicates"][0]["score"] >= 82
+
+
+async def test_merge_request_consistency_compares_branch_changes_against_main_only(
+    client: AsyncClient,
+) -> None:
+    user = await register_user(client, email_prefix="consistency-merge")
+    plan, _event = await _seed_checkout_event(client, user["token"])
+    plan_response = await client.get(
+        f"/api/v1/plans/{plan['id']}",
+        headers=auth_headers(user["token"]),
+    )
+    assert plan_response.status_code == 200, plan_response.text
+
+    branch = await create_branch(
+        client,
+        user["token"],
+        plan_id=plan["id"],
+        draft_revision=plan_response.json()["draft_revision"],
+        branch_name="order-event",
+    )
+    duplicate = await create_event(
+        client,
+        user["token"],
+        plan_id=branch["id"],
+        draft_revision=branch["draft_revision"],
+        event_name="order_completed",
+        description="User finished an order after payment succeeds",
+        category="checkout",
+    )
+    revision = duplicate["draft_revision"]
+    for name, property_type in [
+        ("user_id", "string"),
+        ("order_id", "string"),
+        ("revenue", "float"),
+        ("currency", "string"),
+        ("payment_method", "string"),
+    ]:
+        prop = await create_property(
+            client,
+            user["token"],
+            event_id=duplicate["id"],
+            draft_revision=revision,
+            name=name,
+            property_type=property_type,
+            required=True,
+        )
+        revision = prop["draft_revision"]
+
+    merge_request = await create_merge_request(
+        client,
+        user["token"],
+        plan_id=plan["id"],
+        branch_plan_id=branch["id"],
+        title="Add order event",
+    )
+
+    response = await client.get(
+        f"/api/v1/merge-requests/{merge_request['id']}/consistency",
+        headers=auth_headers(user["token"]),
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["finding_count"] == 1
+    finding = payload["findings"][0]
+    assert finding["event_name"] == "order_completed"
+    assert finding["candidate"]["event_name"] == "CheckoutCompleted"
+    assert finding["candidate"]["label"] == "duplicate_likely"
+
+
+async def test_merge_request_consistency_does_not_compare_modified_event_to_itself(
+    client: AsyncClient,
+) -> None:
+    user = await register_user(client, email_prefix="consistency-merge-self")
+    plan, _event = await _seed_checkout_event(client, user["token"])
+    plan_response = await client.get(
+        f"/api/v1/plans/{plan['id']}",
+        headers=auth_headers(user["token"]),
+    )
+    assert plan_response.status_code == 200, plan_response.text
+
+    branch = await create_branch(
+        client,
+        user["token"],
+        plan_id=plan["id"],
+        draft_revision=plan_response.json()["draft_revision"],
+        branch_name="checkout-docs",
+    )
+    branch_response = await client.get(
+        f"/api/v1/plans/{branch['id']}",
+        headers=auth_headers(user["token"]),
+    )
+    assert branch_response.status_code == 200, branch_response.text
+    branch_payload = branch_response.json()
+    checkout_event = next(
+        event
+        for event in branch_payload["events"]
+        if event["event_name"] == "CheckoutCompleted"
+    )
+
+    updated = await client.patch(
+        f"/api/v1/events/{checkout_event['id']}",
+        headers=auth_headers(user["token"]),
+        json={
+            "draft_revision": branch_payload["draft_revision"],
+            "description": "Customer completed checkout after the payment webhook confirms success",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+
+    merge_request = await create_merge_request(
+        client,
+        user["token"],
+        plan_id=plan["id"],
+        branch_plan_id=branch["id"],
+        title="Clarify checkout trigger",
+    )
+
+    response = await client.get(
+        f"/api/v1/merge-requests/{merge_request['id']}/consistency",
+        headers=auth_headers(user["token"]),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["findings"] == []

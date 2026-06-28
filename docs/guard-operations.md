@@ -56,7 +56,7 @@ curl -X POST "https://trackboard.example/api/v1/plans/{plan_id}/dlq/import" \
   --data-binary @guard-dlq.ndjson
 ```
 
-The import route also accepts a JSON array or `{ "records": [...] }`. It writes `ValidationLog` and `InvalidPayloadError` compatible rows with source label `guard-dlq-import`, uses the latest published plan version when one exists, and skips duplicate Guard DLQ ids for the same plan. It does not replay events, mutate Guard SQLite state, call AI, or publish contract changes.
+The import route also accepts a JSON array or `{ "records": [...] }`. It revalidates each payload against the latest published plan version when one exists, writes `ValidationLog` rows with source label `guard-dlq-import`, and writes `InvalidPayloadError` rows only for payloads that still fail the latest contract. It skips duplicate Guard DLQ ids for the same plan. It does not replay events, mutate Guard SQLite state, call AI, or publish contract changes.
 
 ## Failure Boundaries
 
@@ -64,6 +64,6 @@ The import route also accepts a JSON array or `{ "records": [...] }`. It writes 
 - If an event violates the contract in `block` mode, it is written to DLQ.
 - If replay still fails validation, the event remains in DLQ.
 - DLQ export is read-only and includes only rows whose Guard replay status is still `pending`.
-- DLQ import is a visibility bridge. It does not prove that the payload still violates the latest contract.
+- DLQ import is a visibility bridge. It revalidates against the latest published contract, but it does not mutate Guard replay state or prove that the original Guard contract was wrong.
 - Concurrent Guard workers lease SQLite rows with a short transaction. This is safe for a local queue, but at very high write/read concurrency workers can contend on SQLite locks.
 - Guard does not yet provide vendor-specific batching or authentication adapters.

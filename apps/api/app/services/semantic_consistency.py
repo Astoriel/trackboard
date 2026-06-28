@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models import EventSchema, TrackingPlan
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -469,6 +469,45 @@ class SemanticConsistencyService:
                         "candidate": candidate,
                     }
                 )
+        return sorted(
+            findings,
+            key=lambda finding: (-finding["candidate"].score, finding["event_name"].lower()),
+        )
+
+    async def merge_request_consistency(
+        self,
+        *,
+        main_plan_id: UUID,
+        branch_plan_id: UUID,
+        changed_event_names: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        main_plan = await self._load_plan(main_plan_id)
+        branch_plan = await self._load_plan(branch_plan_id)
+        if branch_plan.parent_plan_id != main_plan.id:
+            raise ConflictError("Branch does not belong to the target plan.", code="invalid_merge_branch")
+
+        changed_names = {name.lower() for name in changed_event_names or set()}
+        main_profiles = [self.build_event_profile(event) for event in main_plan.events or []]
+        branch_profiles = [self.build_event_profile(event) for event in branch_plan.events or []]
+        findings: list[dict[str, Any]] = []
+
+        for branch_profile in branch_profiles:
+            if changed_names and branch_profile.event_name.lower() not in changed_names:
+                continue
+            comparable_main_profiles = [
+                profile
+                for profile in main_profiles
+                if profile.event_name.lower() != branch_profile.event_name.lower()
+            ]
+            for candidate in self.compare_against_events(branch_profile, comparable_main_profiles):
+                findings.append(
+                    {
+                        "event_id": branch_profile.event_id,
+                        "event_name": branch_profile.event_name,
+                        "candidate": candidate,
+                    }
+                )
+
         return sorted(
             findings,
             key=lambda finding: (-finding["candidate"].score, finding["event_name"].lower()),

@@ -377,6 +377,8 @@ export const consistencyApi = {
     api.post<ConsistencyPreviewResponse>(`/plans/${planId}/consistency/preview`, data),
   audit: (planId: string) =>
     api.get<ConsistencyAuditResponse>(`/plans/${planId}/consistency/audit`),
+  mergeRequest: (mrId: string) =>
+    api.get<ConsistencyAuditResponse>(`/merge-requests/${mrId}/consistency`),
   event: (eventId: string) => api.get<ConsistencyPreviewResponse>(`/events/${eventId}/consistency`),
 };
 

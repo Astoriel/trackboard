@@ -72,7 +72,7 @@ POST /api/v1/plans/{plan_id}/dlq/import
 Content-Type: application/x-ndjson
 ```
 
-The same route also accepts a JSON array or `{ "records": [...] }`. Imports create invalid validation-log rows with source label `guard-dlq-import` and upsert `InvalidPayloadError` rows so existing DLQ grouping can see them. Reposting the same Guard DLQ id for the same plan is skipped rather than counted twice.
+The same route also accepts a JSON array or `{ "records": [...] }`. Imports revalidate each payload against the latest published contract, write validation-log rows with source label `guard-dlq-import`, and upsert `InvalidPayloadError` rows only when the payload still violates that latest contract. Reposting the same Guard DLQ id for the same plan is skipped rather than counted twice.
 
 ## Scale Boundary
 

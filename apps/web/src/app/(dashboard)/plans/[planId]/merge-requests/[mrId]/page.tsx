@@ -77,27 +77,17 @@ export default function MergeRequestReviewPage() {
         setMainPlan(mainResponse.data);
         setBranchPlan(branchResponse.data);
 
-        const changedEventNames = new Set([
-          ...(request.diff_summary?.added_events ?? []),
-          ...(request.diff_summary?.modified_events ?? []).map((event) => event.event_name),
-        ]);
-
         setConsistencyFindings([]);
         setConsistencyError("");
         setConsistencyLoading(false);
-        if (changedEventNames.size > 0) {
+        if (
+          (request.diff_summary?.added_events?.length ?? 0) > 0 ||
+          (request.diff_summary?.modified_events?.length ?? 0) > 0
+        ) {
           setConsistencyLoading(true);
           try {
-            const { data } = await consistencyApi.audit(request.branch_plan_id);
-            setConsistencyFindings(
-              (data.findings ?? [])
-                .filter(
-                  (finding) =>
-                    changedEventNames.has(finding.event_name) ||
-                    changedEventNames.has(finding.candidate.event_name),
-                )
-                .slice(0, 5),
-            );
+            const { data } = await consistencyApi.mergeRequest(request.id);
+            setConsistencyFindings((data.findings ?? []).slice(0, 5));
           } catch (auditError) {
             console.error(auditError);
             setConsistencyError("Semantic consistency audit is not available right now.");
